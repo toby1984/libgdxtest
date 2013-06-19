@@ -73,7 +73,7 @@ public abstract class Gun
     }
 	
 	public int getShotIntervalMilliseconds() {
-		return 200;
+		return 100;
 	}
 	
 	public float getAccuracy() {
@@ -81,7 +81,7 @@ public abstract class Gun
 	}
 	
     public float getMaxBulletVelocity() {
-    	return 100f;
+    	return 200f;
     }
     
     public float getMaxRangeSquared() {

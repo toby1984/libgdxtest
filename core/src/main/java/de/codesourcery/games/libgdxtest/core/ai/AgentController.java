@@ -170,7 +170,6 @@ public class AgentController implements ITickListener
             }
             return nextState;
         }
-        
     }
     
     public void addAgent(Entity a) 
