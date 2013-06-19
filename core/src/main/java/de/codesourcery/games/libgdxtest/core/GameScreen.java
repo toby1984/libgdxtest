@@ -18,15 +18,17 @@ import com.badlogic.gdx.math.collision.Ray;
 
 public class GameScreen implements Screen
 {
-    private static final float SCROLL_BORDER_PROXIMITY_THRESHOLD = Player.RADIUS*4; 
+    private static final float SCROLL_BORDER_PROXIMITY_THRESHOLD = Entity.OUTER_RADIUS_IN_PIXELS*4; 
     
     private int width;
     private int height;
     
     private final GameWorld world;
-    private final Player player = new Player("Player #1", new Vector2(0,0) , new Vector2( 1,1 ) ) ;
+    private final Entity player = new Entity("Player #1", new Vector2(0,0) , new Vector2( 1,1 ) ) ;
     
     private OrthographicCamera camera;
+    private long tickCounter=0;
+    
     private BitmapFont font;
     
     // background
@@ -42,7 +44,8 @@ public class GameScreen implements Screen
     	
         world = new GameWorld();
         world.setPlayer( player );
-        
+        final Entity agent1 = new Entity("Agent #1", new Vector2(50,50) , new Vector2( 1,1 ) ) ;
+        world.addAgent( agent1 );
     }
     
     private void setupTextRendering() 
@@ -70,16 +73,22 @@ public class GameScreen implements Screen
     @Override
     public void render(float deltaSeconds)
     {
+        if ( (tickCounter++ % 60 ) == 0 ) {
+            System.out.println("FPS: "+(1.0/deltaSeconds));
+        }
+        
         camera.apply( Gdx.gl10 );
         
         // process input
         processInput();
         
-        // advance world state
-        tick(deltaSeconds);
-
         // render world
         renderWorld();
+        
+        // advance world state
+        tick(deltaSeconds);     
+        
+        tickCounter++;
     }
     
     private void tick(float deltaSeconds) 
@@ -115,6 +124,8 @@ public class GameScreen implements Screen
         font.draw(backgroundBatch, "Player position: "+player.position, 10, y );
         y -= 20;
         font.draw(backgroundBatch, "Camera position: "+camera.position, 10, y );
+        y -= 20;
+        font.draw(backgroundBatch, "Player bounds: "+player.aabb, 10, y );        
         
         backgroundBatch.end();
         
