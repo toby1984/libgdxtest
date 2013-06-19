@@ -1,8 +1,6 @@
 package de.codesourcery.games.libgdxtest.core.ai;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -10,6 +8,7 @@ import com.badlogic.gdx.math.collision.BoundingBox;
 
 import de.codesourcery.games.libgdxtest.core.Entity;
 import de.codesourcery.games.libgdxtest.core.GameWorld;
+import de.codesourcery.games.libgdxtest.core.GameWorld.IDrawableVisitor;
 import de.codesourcery.games.libgdxtest.core.IDrawable;
 import de.codesourcery.games.libgdxtest.core.ITickListener;
 import de.codesourcery.games.libgdxtest.core.Utils;
@@ -18,12 +17,13 @@ public class AgentController implements ITickListener
 {
     public static final float VIEW_RANGE = 200;
     
+    private final BoundingBox tmpBounds = new BoundingBox();
+    
     private final IState SEARCHING = new Searching();
     
     private final Map<Entity,StateHolder> statesByAgent = new HashMap<>();
 
     public interface IState {
-        
         public IState act(Entity agent,GameWorld world);
     }
     
@@ -36,9 +36,40 @@ public class AgentController implements ITickListener
             this.currentState = currentState;
         }
     }
+
+    protected static final class FindNearestResult 
+    {
+    	public final Entity queryingAgent;
+    	public Entity closestTarget = null;
+        public float distanceSquared = Float.MAX_VALUE;
+        
+		public FindNearestResult(Entity queryingAgent) 
+		{
+			this.queryingAgent = queryingAgent;
+		}
+    }
     
     protected final class Searching implements IState {
 
+    	final IDrawableVisitor<FindNearestResult> visitor = new IDrawableVisitor<FindNearestResult>() {
+			
+			@Override
+			public boolean visit(IDrawable d,FindNearestResult result) 
+			{
+				if ( d != result.queryingAgent && d instanceof Entity) 
+				{
+		            final float dist = Utils.squaredDistance(result.queryingAgent,(Entity) d);
+					if ( result.closestTarget == null || dist < result.distanceSquared ) 
+					{
+						result.closestTarget=(Entity)d;
+						result.distanceSquared=dist;
+					}
+				}
+				return true;
+			}
+		};
+		
+		
         @Override
         public String toString()
         {
@@ -46,40 +77,14 @@ public class AgentController implements ITickListener
         }
         
         @Override
-        public IState act(Entity agent,GameWorld world)
+        public IState act(final Entity agent,GameWorld world)
         {
-            final List<Entity> possibleGoals = new ArrayList<>();
-            for ( IDrawable d : getVisibleEntities(agent,world) ) 
-            {
-                if ( d == agent) {
-                    continue;
-                }
-                
-                if ( d instanceof Entity) 
-                {
-                    // some entity that is not the agent itself
-                    possibleGoals.add( (Entity) d);
-                }
-            }
+        	final FindNearestResult nearest = new FindNearestResult(agent);
             
-            if ( possibleGoals.isEmpty() )  
-            {
-                return this; // no possible targets, continue searching
-            }
-            
-            // one or more targets found, pick the closest one
-            Entity closestTarget = null;
-            float distanceSquared = Float.MAX_VALUE;
-            for ( Entity e : possibleGoals ) 
-            {
-                float d = Utils.squaredDistance(agent,e);
-                if ( closestTarget == null || d < distanceSquared ) 
-                {
-                    distanceSquared = d;
-                    closestTarget = e;
-                }
-            }
-            return new Attacking(closestTarget);
+			getAgentFieldOfView(agent, tmpBounds );
+			world.visitEntities( tmpBounds , visitor , nearest );
+			
+            return nearest.closestTarget == null ? this : new Attacking(nearest.closestTarget);
         }
     }    
     
@@ -176,10 +181,8 @@ public class AgentController implements ITickListener
         this.statesByAgent.put( a , new StateHolder(SEARCHING) );
     }
     
-    protected List<IDrawable> getVisibleEntities(Entity agent,GameWorld world)
+    protected void getAgentFieldOfView(Entity agent,BoundingBox bounds)
     {
-        final BoundingBox bounds = new BoundingBox();
-        
         float minX = agent.position.x - VIEW_RANGE;
         float maxX = agent.position.x + VIEW_RANGE;
         
@@ -188,8 +191,6 @@ public class AgentController implements ITickListener
         
         bounds.min.set( minX , minY , 0 );
         bounds.max.set( maxX , maxY , 0 );
-        
-        return world.getEntities( bounds );
     }
 
     @Override
@@ -197,8 +198,11 @@ public class AgentController implements ITickListener
     {
         for ( Entry<Entity, StateHolder> entry : statesByAgent.entrySet() ) 
         {
-            final IState newState = entry.getValue().currentState.act( entry.getKey() , world );
-            entry.getValue().currentState = newState;
+        	if ( entry.getKey().isAlive ) 
+        	{
+        		final IState newState = entry.getValue().currentState.act( entry.getKey() , world );
+        		entry.getValue().currentState = newState;
+        	}
         }
         return true;
     }

@@ -23,10 +23,8 @@ public final class ProjectileGun extends Gun {
     }
     
     @Override
-    protected IBullet doShoot(Entity shooter, GameWorld world)
+    protected IBullet createBullet(Entity shooter, GameWorld world)
     {
-        final IBullet bullet = new Projectile( shooter , perturbAim(shooter.orientation), getMaxBulletVelocity() , getMaxRangeSquared() );
-        world.addTemporaryObject( bullet ); 
-        return bullet;
+        return new Projectile( shooter , applyAccuracy(shooter.orientation), getMaxBulletVelocity() , getMaxRangeSquared() );
     }
 }

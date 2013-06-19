@@ -7,10 +7,25 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.collision.BoundingBox;
 
+import de.codesourcery.games.libgdxtest.core.GameWorld.IDrawableVisitor;
+
 public abstract class Beam extends Bullet
 {
     private final Vector2 target;
     
+    private static final IDrawableVisitor<Beam> tickVisitor = new IDrawableVisitor<Beam>() {
+		
+		@Override
+		public boolean visit(IDrawable hit,Beam beam) 
+		{
+            if ( hit instanceof Entity && hit != beam.shooter ) {
+                beam.aliveTicks=0;
+                ((Entity) hit).hitBy(beam);
+            }			
+			return true;
+		}
+	};
+	
     private int aliveTicks = 10;
 
     public Beam(Entity shooter,float range) 
@@ -67,17 +82,11 @@ public abstract class Beam extends Bullet
         renderer.line( shooter.gunTip.x , shooter.gunTip.y , target.x ,target.y );
         renderer.end();
     }
-
+    
     @Override
     public boolean tick(GameWorld world,float deltaSeconds)
     {
-        for ( IDrawable hit : world.getEntities( getBounds() ) ) 
-        {
-            if ( hit instanceof Entity && hit != shooter ) {
-                aliveTicks=0;
-                ((Entity) hit).hitBy(this);
-            }
-        }
+    	world.visitEntities( getBounds() , tickVisitor , this );
         return aliveTicks-- > 0;
     }
     

@@ -1,9 +1,14 @@
 package de.codesourcery.games.libgdxtest.core;
 
+import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 
 public class Utils
 {
+	public static final Vector3 TMP_3 = new Vector3();
+	public static final Vector2 TMP_2 = new Vector2();
+	
     public static boolean intersect(BoundingBox a,BoundingBox b) 
     {
 

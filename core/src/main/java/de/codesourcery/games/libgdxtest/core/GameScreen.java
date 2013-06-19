@@ -10,11 +10,8 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.Intersector;
-import com.badlogic.gdx.math.Plane;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.math.collision.Ray;
 
 public class GameScreen implements Screen
 {
@@ -27,7 +24,6 @@ public class GameScreen implements Screen
     private final Entity player = new Entity("Player #1", new Vector2(0,0) , new Vector2( 1,1 ) ) ;
     
     private OrthographicCamera camera;
-    private long tickCounter=0;
     
     private BitmapFont font;
     
@@ -36,14 +32,18 @@ public class GameScreen implements Screen
     private SpriteBatch backgroundBatch;
     private final Vector2 backgroundPosition=new Vector2();
     
+    private ShapeRenderer shapeRenderer;
+    
     public GameScreen() 
     {
         backgroundBatch = new SpriteBatch();
+        shapeRenderer = new ShapeRenderer();
         
     	setupTextRendering();
     	
         world = new GameWorld();
         world.setPlayer( player );
+        
         final Entity agent1 = new Entity("Agent #1", new Vector2(50,50) , new Vector2( 1,1 ) ) ;
         world.addAgent( agent1 );
     }
@@ -73,27 +73,24 @@ public class GameScreen implements Screen
     @Override
     public void render(float deltaSeconds)
     {
-        if ( (tickCounter++ % 60 ) == 0 ) {
-            System.out.println("FPS: "+(1.0/deltaSeconds));
-        }
-        
         camera.apply( Gdx.gl10 );
         
         // process input
         processInput();
         
         // render world
-        renderWorld();
+        renderWorld(deltaSeconds);
         
         // advance world state
         tick(deltaSeconds);     
-        
-        tickCounter++;
     }
     
     private void tick(float deltaSeconds) 
     {
-        final boolean playerHasMoved = player.isInMotion();
+    	// memorize motion state BEFORE invoking tick(),even
+    	// if the player came to a halt after tick() we still might
+    	// need to adjust the camera position
+        final boolean playerHasMoved = player.isInMotion(); 
         world.tick( deltaSeconds );
         
         if (  playerHasMoved ) 
@@ -101,8 +98,8 @@ public class GameScreen implements Screen
             maybeScrollBackgroundAndMoveCamera();
         }
     }
-
-    private void renderWorld()
+    
+    private void renderWorld(float deltaSeconds)
     {
         // clear display
         Gdx.graphics.getGL10().glClearColor( 0 , 0, 0, 1 );
@@ -120,33 +117,36 @@ public class GameScreen implements Screen
         
         // DEBUG: render player/camera positions
         backgroundBatch.begin();
+        
         int y = height-20;
         font.draw(backgroundBatch, "Player position: "+player.position, 10, y );
         y -= 20;
         font.draw(backgroundBatch, "Camera position: "+camera.position, 10, y );
         y -= 20;
-        font.draw(backgroundBatch, "Player bounds: "+player.aabb, 10, y );        
+        font.draw(backgroundBatch, "FPS: "+Gdx.graphics.getFramesPerSecond(), 10, y );        	
         
         backgroundBatch.end();
         
         // render world
-        final ShapeRenderer renderer = new ShapeRenderer();
-        renderer.setProjectionMatrix( camera.combined );
-        world.render( renderer , camera );
-        renderer.dispose();
+        shapeRenderer.setProjectionMatrix( camera.combined );
+        world.render( shapeRenderer , camera );
     }
-
+    
     private void processInput()
     {
         // player movement
         if ( Gdx.input.isKeyPressed(Keys.A) ) {
             player.moveLeft();
-        } else if ( Gdx.input.isKeyPressed(Keys.D) ) {
+        } 
+        else if ( Gdx.input.isKeyPressed(Keys.D) ) 
+        {
             player.moveRight();
         }
+        
         if ( Gdx.input.isKeyPressed(Keys.W) ) { 
             player.moveUp();
-        } else if ( Gdx.input.isKeyPressed(Keys.S) ) {
+        } 
+        else if ( Gdx.input.isKeyPressed(Keys.S) ) {
             player.moveDown();
         }
         
@@ -156,15 +156,14 @@ public class GameScreen implements Screen
             player.shoot(world);
         }
         
-        // update player orientation
+        // update player orientation to always point where
+        // the mouse pointer is
         final int x = Gdx.input.getX();
         final int y = Gdx.input.getY();
         
-        final Ray ray = camera.getPickRay( x ,y );
-        
-        Plane xyPlane = new Plane(new Vector3(0, 0, -1f) ,0 );
-        Vector3 coords=new Vector3();
-        Intersector.intersectRayPlane(ray , xyPlane, coords);
+        final Vector3 coords=Utils.TMP_3;
+        coords.set( x , y , 0 );
+        camera.unproject( coords );
         
         float newOrientX = coords.x - player.position.x;
         float newOrientY = coords.y - player.position.y;
@@ -210,6 +209,7 @@ public class GameScreen implements Screen
             
             Vector3 cameraDelta = new Vector3( player.position.x , player.position.y , camera.position.z ).sub(playerPosWorldCoordinates.x ,playerPosWorldCoordinates.y , 0);
             camera.position.add( cameraDelta );
+            
             camera.update(true);                
         }        
     }
@@ -235,6 +235,8 @@ public class GameScreen implements Screen
 
         	backgroundBatch.dispose();
         	backgroundBatch = new SpriteBatch();
+        	shapeRenderer.dispose();
+        	shapeRenderer = new ShapeRenderer();
         }
         camera.update();
     }

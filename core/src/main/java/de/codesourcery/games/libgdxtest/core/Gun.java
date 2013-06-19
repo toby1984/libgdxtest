@@ -38,7 +38,7 @@ public abstract class Gun
         return new ProjectileGun();
     }        
     
-    protected final Vector2 perturbAim(Vector2 direction)
+    protected final Vector2 applyAccuracy(Vector2 direction)
     {
         Vector2 aimDir = direction;
         if ( getAccuracy() != 1.0f ) 
@@ -81,15 +81,16 @@ public abstract class Gun
 	}
 	
     public float getMaxBulletVelocity() {
-    	return 50f;
+    	return 100f;
     }
     
     public float getMaxRangeSquared() {
-    	return 200*200;
+    	final float range = getRange();
+		return range*range;
     }
     
     public float getRange() {
-        return 200;
+        return 300;
     }
     
     public boolean isInRange(Entity shooter,Vector2 target) 
@@ -101,7 +102,7 @@ public abstract class Gun
     
     public abstract boolean canShoot(long ts); 
     
-    protected abstract IBullet doShoot(Entity shooter,GameWorld world);
+    protected abstract IBullet createBullet(Entity shooter,GameWorld world);
     
     public boolean shoot(Entity shooter,GameWorld world) 
     {
@@ -111,7 +112,7 @@ public abstract class Gun
         }
         
         lastShotTimestamp = now;
-        final IBullet bullet = doShoot(  shooter , world );
+        final IBullet bullet = createBullet(  shooter , world );
         lastBullet = bullet;
         world.addTemporaryObject( bullet );   
         return true;

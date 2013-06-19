@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 
 public final class Entity implements ITickListener,IDrawable
@@ -195,11 +194,11 @@ public final class Entity implements ITickListener,IDrawable
     @Override
     public boolean isVisible(Camera camera)
     {
-        Vector3 screenCoords = new Vector3(position.x, position.y , 0 );
-        camera.project( screenCoords );
+    	Utils.TMP_3.set(position.x, position.y , 0 );
+        camera.project( Utils.TMP_3 );
         
-        return screenCoords.x >= 0 && screenCoords.y >= 0 && 
-                screenCoords.x < camera.viewportWidth && screenCoords.y < camera.viewportHeight;
+        return Utils.TMP_3 .x >= 0 && Utils.TMP_3 .y >= 0 && 
+        		Utils.TMP_3 .x < camera.viewportWidth && Utils.TMP_3 .y < camera.viewportHeight;
     }
     
     @Override

@@ -8,7 +8,6 @@ public class Main extends Game
 	@Override
 	public void create () 
 	{
-	    Gdx.graphics.setVSync(true);
 	    setScreen( new GameScreen() );
 	}
 

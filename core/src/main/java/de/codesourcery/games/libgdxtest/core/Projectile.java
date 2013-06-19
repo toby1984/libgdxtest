@@ -5,8 +5,9 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
+
+import de.codesourcery.games.libgdxtest.core.GameWorld.IDrawableVisitor;
 
 public class Projectile extends Bullet
 {
@@ -15,10 +16,10 @@ public class Projectile extends Bullet
 	private final Vector2 initialPosition;
 	private final float maxRangeSquared;
 	
-	private Vector2 position;
-	private Vector2 velocity;
-	private boolean isAlive = true;
-
+	public Vector2 position;
+	public Vector2 velocity;
+	public boolean isAlive = true;
+	
 	public Projectile(Entity shooter,Vector2 direction,float velocity,float maxRangeSquared) 
 	{
 	    super(shooter);
@@ -46,7 +47,8 @@ public class Projectile extends Bullet
 	@Override
 	public boolean isVisible(Camera camera)
 	{
-		return camera.frustum.pointInFrustum( new Vector3( position.x,position.y , 0 ) );
+		Utils.TMP_3.set( position.x,position.y , 0 );
+		return camera.frustum.pointInFrustum( Utils.TMP_3 );
 	}
 
     @Override
@@ -62,15 +64,23 @@ public class Projectile extends Bullet
 		renderer.setColor(Color.RED);
 		renderer.circle( position.x , position.y , RADIUS_IN_PIXELS );
 		renderer.end();
-		
-		// DEBUG
-//        renderer.begin(ShapeType.Line);		
-//        renderer.setColor(Color.GREEN);
-//        
-//        renderer.rect( aabb.min.x , aabb.min.y , aabb.max.x - aabb.min.x  , aabb.max.y - aabb.min.y );
-//        renderer.end();        
 	}
-
+	
+	private static final IDrawableVisitor<Projectile> tickVisitor = new IDrawableVisitor<Projectile>() {
+		
+		@Override
+		public boolean visit(IDrawable hit,Projectile data) 
+		{
+            if ( hit instanceof Entity  && hit != data.shooter) 
+            {
+                data.isAlive = false;
+                ((Entity) hit).hitBy(data);
+                return false;
+            }			
+			return true;
+		}
+	};
+	
 	@Override
 	public boolean tick(GameWorld world,float deltaSeconds)
 	{
@@ -79,15 +89,12 @@ public class Projectile extends Bullet
 	        return false;
 	    }
 	    
-        for ( IDrawable hit : world.getEntities( getBounds() )) 
-        {
-            if ( hit instanceof Entity  && hit != shooter) {
-                isAlive = false;
-                ((Entity) hit).hitBy(this);
-                return false;
-            }
-        }	 
-        
+	    world.visitEntities( getBounds() , tickVisitor , this );
+
+	    if ( ! isAlive ) {
+	    	return false;
+	    }
+	    
 		float dx = position.x - initialPosition.x;
 		float dy = position.y - initialPosition.y;
 
@@ -108,7 +115,7 @@ public class Projectile extends Bullet
 	@Override
 	public String toString()
 	{
-	    return "projectile from "+shooter;
+	    return "projectile from "+shooter+" (velocity "+velocity.len()+")";
 	}
 
     @Override

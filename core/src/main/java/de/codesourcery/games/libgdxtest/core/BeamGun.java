@@ -29,17 +29,15 @@ public final class BeamGun extends Gun {
     }
 
     @Override
-    protected IBullet doShoot(Entity shooter, GameWorld world)
+    protected IBullet createBullet(Entity shooter, GameWorld world)
     {
-        final IBullet bullet = new Beam( shooter , getRange() ) {
+        return new Beam( shooter , getRange() ) {
 
             @Override
             protected Vector2 perturbAim(Vector2 aimDirection)
             {
-                return BeamGun.this.perturbAim( aimDirection );
+                return BeamGun.this.applyAccuracy( aimDirection );
             }
         };
-        world.addTemporaryObject( bullet );    
-        return bullet;
     }
 }
