@@ -5,13 +5,14 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL10;
-import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+
+import de.codesourcery.games.libgdxtest.core.world.ChunkManager;
 
 public class GameScreen implements Screen
 {
@@ -23,7 +24,7 @@ public class GameScreen implements Screen
     private final GameWorld world;
     private final Entity player = new Entity("Player #1", new Vector2(0,0) , new Vector2( 1,1 ) ) ;
     
-    private OrthographicCamera camera;
+    private final ChunkManager chunkManager = new ChunkManager();
     
     private BitmapFont font;
     
@@ -73,7 +74,7 @@ public class GameScreen implements Screen
     @Override
     public void render(float deltaSeconds)
     {
-        camera.apply( Gdx.gl10 );
+        chunkManager.camera.apply( Gdx.gl10 );
         
         // process input
         processInput();
@@ -121,15 +122,15 @@ public class GameScreen implements Screen
         int y = height-20;
         font.draw(backgroundBatch, "Player position: "+player.position, 10, y );
         y -= 20;
-        font.draw(backgroundBatch, "Camera position: "+camera.position, 10, y );
+        font.draw(backgroundBatch, "Camera position: "+chunkManager.camera.position, 10, y );
         y -= 20;
         font.draw(backgroundBatch, "FPS: "+Gdx.graphics.getFramesPerSecond(), 10, y );        	
         
         backgroundBatch.end();
         
         // render world
-        shapeRenderer.setProjectionMatrix( camera.combined );
-        world.render( shapeRenderer , camera );
+        shapeRenderer.setProjectionMatrix( chunkManager.camera.combined );
+        world.render( shapeRenderer , chunkManager.camera );
     }
     
     private void processInput()
@@ -163,7 +164,7 @@ public class GameScreen implements Screen
         
         final Vector3 coords=Utils.TMP_3;
         coords.set( x , y , 0 );
-        camera.unproject( coords );
+        chunkManager.camera.unproject( coords );
         
         float newOrientX = coords.x - player.position.x;
         float newOrientY = coords.y - player.position.y;
@@ -174,7 +175,7 @@ public class GameScreen implements Screen
     {
         // transform player position to view coordinates
         final Vector3 playerPosInScreenCoordinates = new Vector3( player.position.x , player.position.y , 0 );
-        camera.project( playerPosInScreenCoordinates ); // world -> screen coordinates
+        chunkManager.camera.project( playerPosInScreenCoordinates ); // world -> screen coordinates
         
         float posDeltaX = 0.0f;
         float posDeltaY = 0.0f;        
@@ -205,12 +206,10 @@ public class GameScreen implements Screen
             playerPosInScreenCoordinates.y += posDeltaY;            
             
             Vector3 playerPosWorldCoordinates = new Vector3(playerPosInScreenCoordinates.x , height - playerPosInScreenCoordinates.y - 1.0f , 0 ); 
-            camera.unproject( playerPosWorldCoordinates ); // screen -> world coordinates
+            chunkManager.camera.unproject( playerPosWorldCoordinates ); // screen -> world coordinates
             
-            Vector3 cameraDelta = new Vector3( player.position.x , player.position.y , camera.position.z ).sub(playerPosWorldCoordinates.x ,playerPosWorldCoordinates.y , 0);
-            camera.position.add( cameraDelta );
-            
-            camera.update(true);                
+            Vector3 cameraDelta = new Vector3( player.position.x , player.position.y , chunkManager.camera.position.z ).sub(playerPosWorldCoordinates.x ,playerPosWorldCoordinates.y , 0);
+            chunkManager.moveCameraRelative( cameraDelta.x , cameraDelta.y );
         }        
     }
     
@@ -220,25 +219,12 @@ public class GameScreen implements Screen
         this.width = width;
         this.height = height;
         
-        if ( camera == null ) 
-        {
-        	camera = new OrthographicCamera( width , height );
-        } 
-        else 
-        {
-        	Vector3 oldPos = new Vector3(camera.position);
-        	Vector3 oldDir = new Vector3(camera.direction);
-        	
-        	camera = new OrthographicCamera( width , height );
-        	camera.position.set(oldPos);
-        	camera.direction.set(oldDir);
-
-        	backgroundBatch.dispose();
-        	backgroundBatch = new SpriteBatch();
-        	shapeRenderer.dispose();
-        	shapeRenderer = new ShapeRenderer();
-        }
-        camera.update();
+        chunkManager.viewportResized( width , height );
+        
+    	backgroundBatch.dispose();
+    	backgroundBatch = new SpriteBatch();
+    	shapeRenderer.dispose();
+    	shapeRenderer = new ShapeRenderer();
     }
 
     @Override
