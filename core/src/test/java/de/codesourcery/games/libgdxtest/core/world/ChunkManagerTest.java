@@ -135,7 +135,7 @@ public class ChunkManagerTest extends TestCase {
 		}		
 
 		@Override
-		public MyTile getTile(int tileX, int tileY) 
+		public MyTile loadTile(int tileX, int tileY) 
 		{
 			MyTile result;
 			if ( tileX < -1 || tileX > 1 || tileY < -1 || tileY > 1 ) {
@@ -175,6 +175,7 @@ public class ChunkManagerTest extends TestCase {
 		public final Location loc;
 
 		public MyTile(Location loc) {
+			super(loc.x,loc.y);
 			this.loc = loc;
 		}
 		@Override

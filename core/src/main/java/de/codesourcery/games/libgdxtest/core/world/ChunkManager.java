@@ -8,17 +8,18 @@ import com.badlogic.gdx.math.Vector3;
 
 public class ChunkManager 
 {
-	public static final int TILES_PER_ROW=3;
-	public static final int TILES_PER_COLUMN=3;
-	
-	// chunk coordinates
-	private Tile[] currentTiles;
+	// the current chunk (3x3 tiles)
+	private Tile[] currentChunk;
 	
 	private TileManager tileManager;
 	
     public final OrthographicCamera camera = new OrthographicCamera();
     
     // the tile the camera currently is in
+    // tiles are layed out in a cartesian coordinate system
+    // with the y-axis pointing up and the x-axis pointing right
+    
+    // world coordinates (0,0) are right in the center of tile (0,0)
     private int cameraTileX = 0;
     private int cameraTileY = 0;
     
@@ -28,28 +29,28 @@ public class ChunkManager
 	
 	public Tile[] getCurrentChunk() 
 	{
-		if ( currentTiles == null ) 
+		if ( currentChunk == null ) 
 		{
-			currentTiles = new Tile[TILES_PER_ROW*TILES_PER_COLUMN];
+			currentChunk = new Tile[3*3];
 			
 			int x = cameraTileX-1; 
-			for ( int col = 0 ; col < TILES_PER_ROW ; col++ , x++ ) 
+			for ( int col = 0 ; col < 3 ; col++ , x++ ) 
 			{ 
 				int y = cameraTileY+1;
-				for ( int row = 0 ; row < TILES_PER_COLUMN ; row++ , y-- ) 
+				for ( int row = 0 ; row < 3 ; row++ , y-- ) 
 				{
-					final Tile tile = tileManager.getTile( x , y );
-					currentTiles[ row * TILES_PER_ROW + col ] = tile;
+					final Tile tile = tileManager.loadTile( x , y );
+					currentChunk[ row * 3 + col ] = tile;
 				}
 			}
 		}
-		return currentTiles;
+		return currentChunk;
 	}
 	
 	protected void printChunk() 
 	{
 		getCurrentChunk();
-		printChunk(currentTiles);
+		printChunk(currentChunk);
 	}
 	
 	protected static void printChunk(Tile[] currentTiles) 
@@ -75,7 +76,7 @@ public class ChunkManager
 		camera.position.add(deltaX,deltaY,0);
 		camera.update(true);
 		
-		// world (0,0) is at center of middle tile, adjust coordinates by half tile size
+		// world (0,0) is at center of tile at (0,0), adjust coordinates by half tile size
 		float trueX = camera.position.x - Tile.HALF_TILE_WIDTH;
 		float trueY = camera.position.y - Tile.HALF_TILE_HEIGHT;
 		
@@ -111,50 +112,50 @@ public class ChunkManager
 				{
 					case -1:
 						// left , down
-						tileManager.unloadTiles( currentTiles[0],currentTiles[1],currentTiles[2],currentTiles[5],currentTiles[8]);
+						tileManager.unloadTiles( currentChunk[0],currentChunk[1],currentChunk[2],currentChunk[5],currentChunk[8]);
 						
-						currentTiles[1] = currentTiles[3];
-						currentTiles[2] = currentTiles[4];
-						currentTiles[4] = currentTiles[6];
-						currentTiles[5] = currentTiles[7];
+						currentChunk[1] = currentChunk[3];
+						currentChunk[2] = currentChunk[4];
+						currentChunk[4] = currentChunk[6];
+						currentChunk[5] = currentChunk[7];
 						
-						currentTiles[0] = tileManager.getTile( newCameraTileX-1, newCameraTileY+1);
-						currentTiles[3] = tileManager.getTile( newCameraTileX-1, newCameraTileY);
-						currentTiles[6] = tileManager.getTile( newCameraTileX-1, newCameraTileY-1);
-						currentTiles[7] = tileManager.getTile( newCameraTileX, newCameraTileY-1);
-						currentTiles[8] = tileManager.getTile( newCameraTileX+1, newCameraTileY-1);						
+						currentChunk[0] = tileManager.loadTile( newCameraTileX-1, newCameraTileY+1);
+						currentChunk[3] = tileManager.loadTile( newCameraTileX-1, newCameraTileY);
+						currentChunk[6] = tileManager.loadTile( newCameraTileX-1, newCameraTileY-1);
+						currentChunk[7] = tileManager.loadTile( newCameraTileX, newCameraTileY-1);
+						currentChunk[8] = tileManager.loadTile( newCameraTileX+1, newCameraTileY-1);						
 												
 						break;						
 					case 0:
 						// left
-						tileManager.unloadTiles( currentTiles[2],currentTiles[5],currentTiles[8]);
+						tileManager.unloadTiles( currentChunk[2],currentChunk[5],currentChunk[8]);
 						
-						currentTiles[2] = currentTiles[1];
-						currentTiles[5] = currentTiles[4];
-						currentTiles[8] = currentTiles[7];
+						currentChunk[2] = currentChunk[1];
+						currentChunk[5] = currentChunk[4];
+						currentChunk[8] = currentChunk[7];
 						
-						currentTiles[1] = currentTiles[0];
-						currentTiles[4] = currentTiles[3];
-						currentTiles[7] = currentTiles[6];
+						currentChunk[1] = currentChunk[0];
+						currentChunk[4] = currentChunk[3];
+						currentChunk[7] = currentChunk[6];
 						
-						currentTiles[0] = tileManager.getTile( newCameraTileX-1, newCameraTileY+1 );
-						currentTiles[3] = tileManager.getTile( newCameraTileX-1, newCameraTileY );
-						currentTiles[6] = tileManager.getTile( newCameraTileX-1, newCameraTileY-1 );
+						currentChunk[0] = tileManager.loadTile( newCameraTileX-1, newCameraTileY+1 );
+						currentChunk[3] = tileManager.loadTile( newCameraTileX-1, newCameraTileY );
+						currentChunk[6] = tileManager.loadTile( newCameraTileX-1, newCameraTileY-1 );
 						break;
 					case 1:
 						// left , up
-						tileManager.unloadTiles( currentTiles[2],currentTiles[5],currentTiles[6],currentTiles[7],currentTiles[8]);
+						tileManager.unloadTiles( currentChunk[2],currentChunk[5],currentChunk[6],currentChunk[7],currentChunk[8]);
 
-						currentTiles[8] = currentTiles[4];							
-						currentTiles[4] = currentTiles[0];
-						currentTiles[5] = currentTiles[1];
-						currentTiles[7] = currentTiles[3];
+						currentChunk[8] = currentChunk[4];							
+						currentChunk[4] = currentChunk[0];
+						currentChunk[5] = currentChunk[1];
+						currentChunk[7] = currentChunk[3];
 						
-						currentTiles[0] = tileManager.getTile( newCameraTileX-1, newCameraTileY+1 );
-						currentTiles[1] = tileManager.getTile( newCameraTileX, newCameraTileY+1 );
-						currentTiles[2] = tileManager.getTile( newCameraTileX+1, newCameraTileY+1 ); 
-						currentTiles[3] = tileManager.getTile( newCameraTileX-1, newCameraTileY );
-						currentTiles[6] = tileManager.getTile( newCameraTileX-1, newCameraTileY-1 );
+						currentChunk[0] = tileManager.loadTile( newCameraTileX-1, newCameraTileY+1 );
+						currentChunk[1] = tileManager.loadTile( newCameraTileX, newCameraTileY+1 );
+						currentChunk[2] = tileManager.loadTile( newCameraTileX+1, newCameraTileY+1 ); 
+						currentChunk[3] = tileManager.loadTile( newCameraTileX-1, newCameraTileY );
+						currentChunk[6] = tileManager.loadTile( newCameraTileX-1, newCameraTileY-1 );
 						break;						
 				}
 				break;
@@ -162,38 +163,38 @@ public class ChunkManager
 				switch( dy ) {
 					case -1:
 						// down
-						tileManager.unloadTiles( currentTiles[0],currentTiles[1],currentTiles[2]);
+						tileManager.unloadTiles( currentChunk[0],currentChunk[1],currentChunk[2]);
 						
-						currentTiles[0] = currentTiles[3];
-						currentTiles[1] = currentTiles[4];
-						currentTiles[2] = currentTiles[5];
+						currentChunk[0] = currentChunk[3];
+						currentChunk[1] = currentChunk[4];
+						currentChunk[2] = currentChunk[5];
 						
-						currentTiles[3] = currentTiles[6];
-						currentTiles[4] = currentTiles[7];
-						currentTiles[5] = currentTiles[8];
+						currentChunk[3] = currentChunk[6];
+						currentChunk[4] = currentChunk[7];
+						currentChunk[5] = currentChunk[8];
 						
-						currentTiles[6] = tileManager.getTile( newCameraTileX-1, newCameraTileY-1 );
-						currentTiles[7] = tileManager.getTile( newCameraTileX, newCameraTileY-1 );
-						currentTiles[8] = tileManager.getTile( newCameraTileX+1, newCameraTileY-1 );						
+						currentChunk[6] = tileManager.loadTile( newCameraTileX-1, newCameraTileY-1 );
+						currentChunk[7] = tileManager.loadTile( newCameraTileX, newCameraTileY-1 );
+						currentChunk[8] = tileManager.loadTile( newCameraTileX+1, newCameraTileY-1 );						
 						break;
 					case 0:
 						// dx = 0 , dy = 0 => no changes
 						break;
 					case 1:
 						// up
-						tileManager.unloadTiles( currentTiles[6],currentTiles[7],currentTiles[8]);
+						tileManager.unloadTiles( currentChunk[6],currentChunk[7],currentChunk[8]);
 						
-						currentTiles[6] = currentTiles[3];
-						currentTiles[7] = currentTiles[4];
-						currentTiles[8] = currentTiles[5];
+						currentChunk[6] = currentChunk[3];
+						currentChunk[7] = currentChunk[4];
+						currentChunk[8] = currentChunk[5];
 						
-						currentTiles[3] = currentTiles[0];
-						currentTiles[4] = currentTiles[1];
-						currentTiles[5] = currentTiles[2];
+						currentChunk[3] = currentChunk[0];
+						currentChunk[4] = currentChunk[1];
+						currentChunk[5] = currentChunk[2];
 						
-						currentTiles[0] = tileManager.getTile( newCameraTileX-1, newCameraTileY+1 );
-						currentTiles[1] = tileManager.getTile( newCameraTileX, newCameraTileY+1 );
-						currentTiles[2] = tileManager.getTile( newCameraTileX+1, newCameraTileY+1 );						
+						currentChunk[0] = tileManager.loadTile( newCameraTileX-1, newCameraTileY+1 );
+						currentChunk[1] = tileManager.loadTile( newCameraTileX, newCameraTileY+1 );
+						currentChunk[2] = tileManager.loadTile( newCameraTileX+1, newCameraTileY+1 );						
 						break;						
 				}				
 				break;
@@ -201,49 +202,49 @@ public class ChunkManager
 				switch( dy ) {
 					case -1:
 						// right , down
-						tileManager.unloadTiles( currentTiles[0],currentTiles[1],currentTiles[2],currentTiles[3],currentTiles[6]);
+						tileManager.unloadTiles( currentChunk[0],currentChunk[1],currentChunk[2],currentChunk[3],currentChunk[6]);
 						
-						currentTiles[0] = currentTiles[4];
-						currentTiles[1] = currentTiles[5];
-						currentTiles[3] = currentTiles[7];
-						currentTiles[4] = currentTiles[8];
+						currentChunk[0] = currentChunk[4];
+						currentChunk[1] = currentChunk[5];
+						currentChunk[3] = currentChunk[7];
+						currentChunk[4] = currentChunk[8];
 						
-						currentTiles[2] = tileManager.getTile( newCameraTileX+1 , newCameraTileY+1);
-						currentTiles[5] = tileManager.getTile( newCameraTileX+1 , newCameraTileY);
-						currentTiles[6] = tileManager.getTile( newCameraTileX-1 , newCameraTileY-1);
-						currentTiles[7] = tileManager.getTile( newCameraTileX , newCameraTileY-1);
-						currentTiles[8] = tileManager.getTile( newCameraTileX+1 , newCameraTileY-1);							
+						currentChunk[2] = tileManager.loadTile( newCameraTileX+1 , newCameraTileY+1);
+						currentChunk[5] = tileManager.loadTile( newCameraTileX+1 , newCameraTileY);
+						currentChunk[6] = tileManager.loadTile( newCameraTileX-1 , newCameraTileY-1);
+						currentChunk[7] = tileManager.loadTile( newCameraTileX , newCameraTileY-1);
+						currentChunk[8] = tileManager.loadTile( newCameraTileX+1 , newCameraTileY-1);							
 						break;
 					case 0:
 						// right
-						tileManager.unloadTiles( currentTiles[0],currentTiles[3],currentTiles[6]);
+						tileManager.unloadTiles( currentChunk[0],currentChunk[3],currentChunk[6]);
 						
-						currentTiles[0] = currentTiles[1];
-						currentTiles[3] = currentTiles[4];
-						currentTiles[6] = currentTiles[7];
+						currentChunk[0] = currentChunk[1];
+						currentChunk[3] = currentChunk[4];
+						currentChunk[6] = currentChunk[7];
 						
-						currentTiles[1] = currentTiles[2];
-						currentTiles[4] = currentTiles[5];
-						currentTiles[7] = currentTiles[8];
+						currentChunk[1] = currentChunk[2];
+						currentChunk[4] = currentChunk[5];
+						currentChunk[7] = currentChunk[8];
 						
-						currentTiles[2] = tileManager.getTile( newCameraTileX+1, newCameraTileY-1 );
-						currentTiles[5] = tileManager.getTile( newCameraTileX+1, newCameraTileY );
-						currentTiles[8] = tileManager.getTile( newCameraTileX+1, newCameraTileY+1 );						
+						currentChunk[2] = tileManager.loadTile( newCameraTileX+1, newCameraTileY-1 );
+						currentChunk[5] = tileManager.loadTile( newCameraTileX+1, newCameraTileY );
+						currentChunk[8] = tileManager.loadTile( newCameraTileX+1, newCameraTileY+1 );						
 						break;
 					case 1:
 						// right , up
-						tileManager.unloadTiles( currentTiles[0],currentTiles[3],currentTiles[6],currentTiles[7],currentTiles[8]);
+						tileManager.unloadTiles( currentChunk[0],currentChunk[3],currentChunk[6],currentChunk[7],currentChunk[8]);
 						
-						currentTiles[3] = currentTiles[1];
-						currentTiles[6] = currentTiles[4];
-						currentTiles[4] = currentTiles[2];
-						currentTiles[7] = currentTiles[5];
+						currentChunk[3] = currentChunk[1];
+						currentChunk[6] = currentChunk[4];
+						currentChunk[4] = currentChunk[2];
+						currentChunk[7] = currentChunk[5];
 						
-						currentTiles[0] = tileManager.getTile( newCameraTileX-1, newCameraTileY+1 );
-						currentTiles[1] = tileManager.getTile( newCameraTileX, newCameraTileY+1 );
-						currentTiles[2] = tileManager.getTile( newCameraTileX+1, newCameraTileY+1 );
-						currentTiles[5] = tileManager.getTile( newCameraTileX+1, newCameraTileY );
-						currentTiles[8] = tileManager.getTile( newCameraTileX+1, newCameraTileY-1 );						
+						currentChunk[0] = tileManager.loadTile( newCameraTileX-1, newCameraTileY+1 );
+						currentChunk[1] = tileManager.loadTile( newCameraTileX, newCameraTileY+1 );
+						currentChunk[2] = tileManager.loadTile( newCameraTileX+1, newCameraTileY+1 );
+						currentChunk[5] = tileManager.loadTile( newCameraTileX+1, newCameraTileY );
+						currentChunk[8] = tileManager.loadTile( newCameraTileX+1, newCameraTileY-1 );						
 												
 						break;						
 				}				
