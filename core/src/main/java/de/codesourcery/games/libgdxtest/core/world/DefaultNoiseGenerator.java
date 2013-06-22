@@ -9,7 +9,10 @@ import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 
+import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
@@ -18,13 +21,13 @@ import com.badlogic.gdx.math.Vector3;
 public class DefaultNoiseGenerator 
 {
 	private static final boolean ANTI_ALIAS = false;
-	public static final float TILE_SIZE=0.1f;
+	public static final float TILE_SIZE=3f;
 	
-	private final int[] colorRange = createLandscapeGradient() ;// createBlackWhiteGradient();
+	private final int[] colorRange = createLandscapeGradient() ;// createBlackWhiteGradient(); // 
 
 	private final int heightMapSize;
 
-	private PerlinNoise perlinNoise;
+	private SimplexNoise simplexNoise;
 	private long seed;
 
 	public DefaultNoiseGenerator(int heightMapSize) {
@@ -33,7 +36,7 @@ public class DefaultNoiseGenerator
 
 	public static void main(String[] args)
 	{
-		new DefaultNoiseGenerator(128).test();
+		new DefaultNoiseGenerator(512).test();
 	}
 
 	protected void test() 
@@ -42,15 +45,27 @@ public class DefaultNoiseGenerator
 
 			private long seed = System.currentTimeMillis();
 			
+			private boolean doBlending = false;
+			
 			private int tileX = 0;
 			private int tileY = 0;
 			
+			private BufferedImage grass;
+			private BufferedImage stones;			
+			
 			{
+				stones = createTexture( new File("/home/tobi/workspace/libgdxtest/assets/stones.png") , 1024 , 1024 );				
+				grass = createTexture( new File("/home/tobi/workspace/libgdxtest/assets/grass.png") , 1024 , 1024 );
+				
 				addKeyListener(new KeyAdapter() {
 					@Override
 					public void keyTyped(KeyEvent e)
 					{
 						switch( e.getKeyChar() ) {
+							case 'b':
+								doBlending = !doBlending;
+								repaint();
+								break;
 							case ' ':
 								seed = System.currentTimeMillis();
 								repaint();
@@ -79,36 +94,54 @@ public class DefaultNoiseGenerator
 			@Override
 			protected void paintComponent(Graphics g)
 			{
+				super.paintComponent(g);
+				
 				if ( ANTI_ALIAS ) {
 					((Graphics2D) g).setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
 				}
-				
+			
 				// 2x2 images
-				float xOffset= tileX*TILE_SIZE;
-				float yOffset= tileY*TILE_SIZE;
-				
-				float scale = 1f/ ( (xOffset+TILE_SIZE)*(yOffset+TILE_SIZE) );
-				BufferedImage image1 = getImage( xOffset , yOffset , scale );
-				BufferedImage image2 = getImage( xOffset+TILE_SIZE , yOffset , scale );
-				BufferedImage image3 = getImage( xOffset , yOffset+TILE_SIZE , scale );
-				BufferedImage image4 = getImage( xOffset+TILE_SIZE , yOffset+TILE_SIZE , scale );
+				float xOffset= tileX*TILE_SIZE*0.1f;
+				float yOffset= tileY*TILE_SIZE*0.1f;
 				
 				int halfWidth = getWidth() / 2;
 				int halfHeight = getHeight() / 2;
 				
+				BufferedImage image1;
+				BufferedImage image2;
+				BufferedImage image3;
+				BufferedImage image4;				
+				if ( doBlending ) {
+					
+					image1 = createBlendedImage( xOffset , yOffset  );
+					image2 = createBlendedImage( xOffset+TILE_SIZE , yOffset  );
+					image3 = createBlendedImage( xOffset , yOffset+TILE_SIZE  );
+					image4 = createBlendedImage( xOffset+TILE_SIZE , yOffset+TILE_SIZE  );
+					
+				} else {
+					image1 = getImage( xOffset , yOffset  );
+					image2 = getImage( xOffset+TILE_SIZE , yOffset  );
+					image3 = getImage( xOffset , yOffset+TILE_SIZE  );
+					image4 = getImage( xOffset+TILE_SIZE , yOffset+TILE_SIZE  );
+				}
 				g.drawImage( image1 ,0,0, halfWidth , halfHeight , null );
 				g.drawImage( image2 ,halfWidth,0, halfWidth , halfHeight , null ); 
 				g.drawImage( image3 ,0,halfHeight, halfWidth , halfHeight , null ); 
 				g.drawImage( image4 ,halfWidth,halfHeight, halfWidth , halfHeight , null ); 
-				
+
 				g.setColor( Color.RED );
 				g.drawString( "X = "+xOffset +" / Y = "+yOffset+" / tile size: "+TILE_SIZE , 15,15 );
 			}
-
-			private BufferedImage getImage(float x,float y,float scale) 
+			
+			private BufferedImage createBlendedImage(float x,float y) 
 			{
-				final float[] noise = createNoise2D( x, y , seed ,scale );
-				return heightMapToTexture(noise, heightMapSize );
+				final float[] noise = createNoise2D( x, y , seed );
+				return blendTextures( stones , grass , noise , 0.3f );
+			}			
+			
+			private BufferedImage getImage(float x,float y) 
+			{
+				return heightMapToTexture(createNoise2D(x,y,seed), heightMapSize );
 			}
 		};
 
@@ -123,38 +156,85 @@ public class DefaultNoiseGenerator
 		frame.setVisible( true );
 		panel.requestFocus();    	
 	}
-
-	private float[] generatePerlinNoise(float xOffset,float yOffset, long seed,float scale) {
-
-		float[] result = new float[ heightMapSize*heightMapSize ];
-		
-		float factor = TILE_SIZE/heightMapSize;
-		
-		int ptr = 0;
-		for ( int y = 0 ; y < heightMapSize ; y++ ) 
-		{		
-			for ( int x = 0 ; x < heightMapSize ; x++ ) 
-			{
-				float value = scale*perlinNoise.tileableNoise2(xOffset + x*factor , yOffset + y*factor , TILE_SIZE , TILE_SIZE  );
-				result[ptr++] = value;
-			}
+	
+	private float[] createNoise2D(float x,float y,long seed) 
+	{
+		if ( simplexNoise == null || this.seed != seed ) {
+			simplexNoise = new SimplexNoise(seed);
 		}
-		return result;
+		return simplexNoise.createHeightMap( x ,y , heightMapSize , TILE_SIZE , 1 , 0.5f );
 	}
 
-	public float[] createNoise2D(float xOffset,float yOffset,long seed,float scale)
-	{
-		if ( seed != this.seed || perlinNoise == null ) 
-		{
-			perlinNoise = new PerlinNoise(seed);
-			this.seed = seed;
+	private BufferedImage blendTextures(BufferedImage texture1,BufferedImage texture2,float[] heightMap,float minValue) {
+		
+		if ( texture1.getWidth() != texture2.getWidth() || texture1.getHeight() != texture2.getHeight()) {
+			throw new IllegalArgumentException("Textures have different sizes");
 		}
-		return generatePerlinNoise(xOffset,yOffset,seed,scale);		
+		
+		final BufferedImage result = new BufferedImage( texture1.getWidth() , texture1.getHeight() , BufferedImage.TYPE_INT_ARGB);
+		
+		float xScale = heightMapSize / (float) texture1.getWidth();
+		float yScale = heightMapSize / (float) texture1.getHeight();
+
+		float min = Float.MAX_VALUE;
+		float max = Float.MIN_VALUE;
+		
+		for ( int x = 0 ; x < texture1.getWidth() ; x++ ) 
+		{
+			for ( int y = 0 ; y < texture1.getHeight() ; y++ ) 
+			{
+				int color1 = texture1.getRGB( x , y );				
+				int hx = (int) (xScale*x);
+				int hy = (int) (yScale*y);
+				float alpha = heightMap[hx+hy*heightMapSize];
+				
+				min = Math.min(min,alpha );
+				max = Math.max(max,alpha);	
+				
+				if ( alpha >= minValue  ) 
+				{
+					int color2 = texture2.getRGB( x , y );
+					int newColor = addRGB( applyAlpha( color1 , 1.0f - alpha ) , applyAlpha( color2 , alpha ) );
+					result.setRGB( x , y , newColor );
+				} else {
+					result.setRGB( x , y , color1 );
+				}
+			}
+		}
+		
+		System.out.println("ALPHA: min: "+min+" / max: "+max);
+		return result;
+	}
+	
+	private static int addRGB(int rgb1,int rgb2) 
+	{
+		int r = (rgb1 >> 16) & 0xff;
+		int g = (rgb1 >> 8) & 0xff;
+		int b = (rgb1 ) & 0xff;		
+		
+		r += (rgb2 >> 16) & 0xff;
+		g += (rgb2 >> 8) & 0xff;
+		b += (rgb2 ) & 0xff;
+		
+		return 0xff << 24 | r << 16 | g << 8 | b;
+	}
+	
+	private static int applyAlpha(int argb , float factor) 
+	{
+	    //  (Bits 24-31 are alpha, 16-23 are red, 8-15 are green, 0-7 are blue).
+		int a = (argb >> 24) & 0xff;
+		float r = (argb >> 16) & 0xff;
+		r *= factor;
+		float g = (argb >> 8) & 0xff;
+		g *= factor;
+		float b = (argb ) & 0xff;
+		b *= factor;
+		return a << 24 | ((int) r) << 16 | ((int) g) << 8 | ((int) b);
 	}
 
 	private BufferedImage heightMapToTexture(float[] heightMap, int heightMapSize)
 	{
-		final BufferedImage img = new BufferedImage(heightMapSize,heightMapSize,BufferedImage.TYPE_INT_RGB);
+		final BufferedImage img = new BufferedImage(heightMapSize,heightMapSize,BufferedImage.TYPE_INT_ARGB);
 		for ( int z1 = 0 ; z1 < heightMapSize ; z1++ ) 
 		{        
 			for ( int x1 = 0 ; x1 < heightMapSize ; x1++ ) 
@@ -166,10 +246,33 @@ public class DefaultNoiseGenerator
 				} else if ( index > 255 ) {
 					index = 255;
 				}
-				img.setRGB( x1 , z1 , colorRange[ index ] );
+				img.setRGB( x1 , z1 , colorRange[ index ] | (255 << 24));
 			}
 		}
 		return img;
+	}
+	
+	private BufferedImage createTexture(File file,int width,int height) 
+	{
+		final BufferedImage texture;
+		try {
+			texture = ImageIO.read( file );
+		} 
+		catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		
+		final BufferedImage result = new BufferedImage(width,height,BufferedImage.TYPE_INT_ARGB);
+		final Graphics2D g = result.createGraphics();
+		int xStep = texture.getWidth();
+		int yStep = texture.getHeight();
+		for ( int x = 0 ; x < width ; x+=xStep ) 
+		{
+			for ( int y = 0 ; y < height ; y+=yStep ) {
+				g.drawImage( texture , x , y , xStep , yStep , null );
+			}
+		}
+		return result;
 	}
 
 	private int[] createLandscapeGradient() 

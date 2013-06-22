@@ -4,20 +4,17 @@ import java.util.Random;
 
 public class FractalNoise
 {
-    public static float[][] generateFractalNoise(float[][] baseNoise, int octaveCount,float persistance)
+    public static float[] generateFractalNoise(int mapSize,float[] baseNoise, int octaveCount,float persistance)
     {
-        int width = baseNoise.length;
-        int height = baseNoise[0].length;
-
-        float[][][] smoothNoise = new float[octaveCount][][]; //an array of 2D arrays containing
+        float[][] smoothNoise = new float[octaveCount][]; //an array of 2D arrays containing
 
         //generate smooth noise
         for (int i = 0; i < octaveCount; i++)
         {
-            smoothNoise[i] = generateSmoothNoise(baseNoise, i);
+            smoothNoise[i] = generateSmoothNoise(mapSize,baseNoise, i);
         }
 
-        float[][] fractalNoise = createEmptyArray(width, height);
+        float[] fractalNoise = new float[mapSize*mapSize];
         float amplitude = 1.0f;
         float totalAmplitude = 0.0f;
 
@@ -27,22 +24,19 @@ public class FractalNoise
             amplitude *= persistance;
             totalAmplitude += amplitude;
 
-            for (int i = 0; i < width; i++)
+            for (int i = 0; i < mapSize; i++)
             {
-                for (int j = 0; j < height; j++)
+                for (int j = 0; j < mapSize; j++)
                 {
-                    fractalNoise[i][j] += smoothNoise[octave][i][j] * amplitude;
+                    fractalNoise[i+j*mapSize] += smoothNoise[octave][i+j*mapSize] * amplitude;
                 }
             }
         }
 
         //normalisation
-        for (int i = 0; i < width; i++)
+        for (int i = 0; i < mapSize*mapSize; i++)
         {
-            for (int j = 0; j < height; j++)
-            {
-                fractalNoise[i][j] /= totalAmplitude;
-            }
+        	fractalNoise[i] /= totalAmplitude;
         }
 
         return fractalNoise;
@@ -84,40 +78,40 @@ public class FractalNoise
         return noise;
     }    
 
-    private static float[][] generateSmoothNoise(float[][] baseNoise, int octave)
+    private static float[] generateSmoothNoise(int mapSize,float[] baseNoise, int octave)
     {
-        int width = baseNoise.length;
-        int height = baseNoise[0].length;
-
-        float[][] smoothNoise = createEmptyArray(width, height);
+        float[] smoothNoise = new float[mapSize*mapSize];
 
         int samplePeriod = 1 << octave; // calculates 2 ^ k
         float sampleFrequency = 1.0f / samplePeriod;
 
-        for (int i = 0; i < width; i++)
+        for (int i = 0; i < mapSize; i++)
         {
             //calculate the horizontal sampling indices
             int sample_i0 = (i / samplePeriod) * samplePeriod;
-            int sample_i1 = (sample_i0 + samplePeriod) % width; //wrap around
+            int sample_i1 = (sample_i0 + samplePeriod) % mapSize; //wrap around
             float horizontal_blend = (i - sample_i0) * sampleFrequency;
 
-            for (int j = 0; j < height; j++)
+            for (int j = 0; j < mapSize; j++)
             {
                 //calculate the vertical sampling indices
                 int sample_j0 = (j / samplePeriod) * samplePeriod;
-                int sample_j1 = (sample_j0 + samplePeriod) % height; //wrap around
+                int sample_j1 = (sample_j0 + samplePeriod) % mapSize; //wrap around
                 float vertical_blend = (j - sample_j0) * sampleFrequency;
 
                 //blend the top two corners
-                float top = interpolate(baseNoise[sample_i0][sample_j0],
-                        baseNoise[sample_i1][sample_j0], horizontal_blend);
+                float sample1 = baseNoise[sample_i0 + sample_j0*mapSize];
+				float sample2 = baseNoise[sample_i1 + sample_j0*mapSize];
+				float sample3 = baseNoise[sample_i0 + sample_j1*mapSize];
+				float sample4 = baseNoise[sample_i1 + sample_j1*mapSize];
+                
+//				float top = interpolate(sample1,sample2, horizontal_blend);
+//                //blend the bottom two corners
 
-                //blend the bottom two corners
-                float bottom = interpolate(baseNoise[sample_i0][sample_j1],
-                        baseNoise[sample_i1][sample_j1], horizontal_blend);
-
-                //final blend
-                smoothNoise[i][j] = interpolate(top, bottom, vertical_blend);
+//				float bottom = interpolate(sample3,sample4, horizontal_blend);
+//                float sum = interpolate(top, bottom, vertical_blend); //final blend
+                
+				smoothNoise[i+j*mapSize] = sample1;
             }
         }
 
