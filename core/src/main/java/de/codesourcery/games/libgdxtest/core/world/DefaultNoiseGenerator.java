@@ -27,10 +27,10 @@ import com.badlogic.gdx.math.Vector3;
 
 public class DefaultNoiseGenerator 
 {
-	private static final float PERSISTANCE = 3f;
-	private static final int OCTAVES = 6;
-	public static final float TILE_SIZE=0.7f;
-	private static final int MAP_SIZE = 1024;
+	private static final float PERSISTANCE = 0.3f;
+	private static final int OCTAVES = 3;
+	public static final float TILE_SIZE=2f;
+	private static final int MAP_SIZE = 256;
 	
 	private static final boolean ANTI_ALIAS = false;	
 	

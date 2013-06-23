@@ -181,9 +181,7 @@ public class ChunkManager
 						// dx = 0 , dy = 0 => no changes
 						break;
 					case 1:
-						// up
-						tileManager.unloadTiles( currentChunk[6],currentChunk[7],currentChunk[8]);
-						
+						// up						
 						currentChunk[6] = currentChunk[3];
 						currentChunk[7] = currentChunk[4];
 						currentChunk[8] = currentChunk[5];
