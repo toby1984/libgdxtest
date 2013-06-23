@@ -11,6 +11,13 @@ import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
+import java.util.concurrent.TimeUnit;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -23,7 +30,7 @@ public class DefaultNoiseGenerator
 	private static final float PERSISTANCE = 3f;
 	private static final int OCTAVES = 6;
 	public static final float TILE_SIZE=0.7f;
-	private static final int MAP_SIZE = 256;
+	private static final int MAP_SIZE = 1024;
 	
 	private static final boolean ANTI_ALIAS = false;	
 	
@@ -35,9 +42,26 @@ public class DefaultNoiseGenerator
 
 	private SimplexNoise simplexNoise;
 	private long seed;
+	
+	private final ThreadPoolExecutor threadPool;
 
 	public DefaultNoiseGenerator(int heightMapSize) {
 		this.heightMapSize = heightMapSize;
+		
+		final int poolSize = Runtime.getRuntime().availableProcessors()+1;
+		BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(100);
+		ThreadFactory threadFactory = new ThreadFactory() {
+			
+			@Override
+			public Thread newThread(Runnable r) 
+			{
+				Thread t = new Thread(r);
+				t.setDaemon(true);
+				return t;
+			}
+		};
+		
+		threadPool = new ThreadPoolExecutor(poolSize, poolSize, 10, TimeUnit.MINUTES, workQueue, threadFactory, new CallerRunsPolicy() );
 	}
 
 	public static void main(String[] args)
@@ -121,27 +145,33 @@ public class DefaultNoiseGenerator
 				int halfWidth = getWidth() / 2;
 				int halfHeight = getHeight() / 2;
 				
-				BufferedImage image1;
-				BufferedImage image2;
-				BufferedImage image3;
-				BufferedImage image4;				
+				BufferedImage[] image1={null};
+				BufferedImage[] image2={null};
+				BufferedImage[] image3={null};
+				BufferedImage[] image4={null};		
+				CountDownLatch latch = new CountDownLatch(4);
 				if ( doBlending ) {
 					
-					image1 = createBlendedImage( xOffset , yOffset  );
-					image2 = createBlendedImage( xOffset+TILE_SIZE , yOffset  );
-					image3 = createBlendedImage( xOffset , yOffset+TILE_SIZE  );
-					image4 = createBlendedImage( xOffset+TILE_SIZE , yOffset+TILE_SIZE  );
+					image1[0] = createBlendedImage( xOffset , yOffset  );
+					image2[0] = createBlendedImage( xOffset+TILE_SIZE , yOffset  );
+					image3[0] = createBlendedImage( xOffset , yOffset+TILE_SIZE  );
+					image4[0] = createBlendedImage( xOffset+TILE_SIZE , yOffset+TILE_SIZE  );
 					
 				} else {
-					image1 = getImage( xOffset , yOffset  );
-					image2 = getImage( xOffset+TILE_SIZE , yOffset  );
-					image3 = getImage( xOffset , yOffset+TILE_SIZE  );
-					image4 = getImage( xOffset+TILE_SIZE , yOffset+TILE_SIZE  );
+					getImage( latch , xOffset , yOffset , image1  );
+					getImage( latch , xOffset+TILE_SIZE , yOffset , image2 );
+					getImage( latch , xOffset , yOffset+TILE_SIZE , image3 );
+					getImage( latch , xOffset+TILE_SIZE , yOffset+TILE_SIZE , image4 );
+					try {
+						latch.await();
+					} catch (InterruptedException e) {
+						throw new RuntimeException(e);
+					}
 				}
-				g.drawImage( image1 ,0,0, halfWidth , halfHeight , null );
-				g.drawImage( image2 ,halfWidth,0, halfWidth , halfHeight , null ); 
-				g.drawImage( image3 ,0,halfHeight, halfWidth , halfHeight , null ); 
-				g.drawImage( image4 ,halfWidth,halfHeight, halfWidth , halfHeight , null ); 
+				g.drawImage( image1[0] ,0,0, halfWidth , halfHeight , null );
+				g.drawImage( image2[0] ,halfWidth,0, halfWidth , halfHeight , null ); 
+				g.drawImage( image3[0] ,0,halfHeight, halfWidth , halfHeight , null ); 
+				g.drawImage( image4[0] ,halfWidth,halfHeight, halfWidth , halfHeight , null ); 
 
 				g.setColor( Color.RED );
 				g.drawString( "X = "+xOffset +" / Y = "+yOffset+" / tile size: "+TILE_SIZE , 15,15 );
@@ -153,18 +183,29 @@ public class DefaultNoiseGenerator
 				return blendTextures( stones , grass , noise , 0.0f );
 			}			
 			
-			private BufferedImage getImage(float x,float y) 
+			private void getImage(final CountDownLatch latch,final float x,final float y,final BufferedImage[] image) 
 			{
-				long time = -System.currentTimeMillis();
-				float[] noise2d = createNoise2D(x,y,seed);
-				time += System.currentTimeMillis();
-				System.out.println("Noise generation: "+time+" ms");
-				
-				time = -System.currentTimeMillis();
-				BufferedImage image= heightMapToTexture(noise2d, heightMapSize );
-				time += System.currentTimeMillis();
-				System.out.println("Image generation: "+time+" ms");				
-				return image;
+				final Runnable r = new Runnable() {
+
+					@Override
+					public void run() 
+					{
+						try {
+						long time = -System.currentTimeMillis();
+						float[] noise2d = createNoise2D(x,y,seed);
+						time += System.currentTimeMillis();
+						System.out.println("Noise generation: "+time+" ms");
+						
+						time = -System.currentTimeMillis();
+						image[0]= heightMapToTexture(noise2d, heightMapSize );
+						time += System.currentTimeMillis();
+						System.out.println("Image generation: "+time+" ms");
+						} finally {
+							latch.countDown();
+						}
+					}
+				};
+				threadPool.submit( r );
 			}
 		};
 
