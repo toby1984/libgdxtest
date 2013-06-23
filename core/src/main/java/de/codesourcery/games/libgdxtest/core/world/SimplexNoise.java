@@ -14,6 +14,8 @@ import java.util.Random;
  */
 public class SimplexNoise { // Simplex noise in 2D, 3D and 4D
 	
+	private static final double SQRT_3 = Math.sqrt(3.0);
+
 	private int grad3[][] = { { 1, 1, 0 }, { -1, 1, 0 }, { 1, -1, 0 },
 			{ -1, -1, 0 }, { 1, 0, 1 }, { -1, 0, 1 }, { 1, 0, -1 },
 			{ -1, 0, -1 }, { 0, 1, 1 }, { 0, -1, 1 }, { 0, 1, -1 },
@@ -87,11 +89,11 @@ public class SimplexNoise { // Simplex noise in 2D, 3D and 4D
 	public double noise2(double xin, double yin) {
 		double n0, n1, n2; // Noise contributions from the three corners
 		// Skew the input space to determine which simplex cell we're in
-		final double F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+		final double F2 = 0.5 * (SQRT_3 - 1.0);
 		double s = (xin + yin) * F2; // Hairy factor for 2D
 		int i = fastfloor(xin + s);
 		int j = fastfloor(yin + s);
-		final double G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+		final double G2 = (3.0 - SQRT_3) / 6.0;
 		double t = (i + j) * G2;
 		double X0 = i - t; // Unskew the cell origin back to (x,y) space
 		double Y0 = j - t;
@@ -293,40 +295,44 @@ public class SimplexNoise { // Simplex noise in 2D, 3D and 4D
 		return 32.0 * (n0 + n1 + n2 + n3);
 	}
 	
-	public float[] createHeightMap(float xOffset,float yOffset,int mapSize,float tileSize,int octaves,float persistence) 
+	public float[] createHeightMap(float xOffset,float yOffset,int mapSize,float tileSize,int octaveCount,float persistance) 
 	{
-		float[] baseNoise = createBaseNoise(xOffset, yOffset, mapSize, tileSize);
-		return FractalNoise.generateFractalNoise( mapSize,baseNoise , octaves , persistence );
-	}
-	
-	public float[] createBaseNoise(float xOffset,float yOffset,int mapSize,float tileSize) 
-	{		
-		float x1 = xOffset;
-		float x2 = x1+tileSize;
-		
-		float y1 = yOffset;
-		float y2 = y1+tileSize;
-		
-        float dx=x2-x1;
-        float dy=y2-y1;		
+        float amplitude = 1.0f; // noise2() yields range -1...1
+        double totalAmplitude = 0.0f;   
+        
+        for (int octave = octaveCount - 1; octave >= 0; octave--)
+        {
+            amplitude *= persistance;
+            totalAmplitude += amplitude;
+        }
+        
+        final float scalingFactor = tileSize/(float) mapSize;
         
 		float[] result = new float[mapSize*mapSize];
-		for ( int x =0 ; x < mapSize ; x++ ) 
+		int ptr = 0;
+		for ( int y = 0 ; y < mapSize ; y++ ) 
 		{
-			for ( int y = 0 ; y < mapSize ; y++ ) 
+			for ( int x =0 ; x < mapSize ; x++ ) 
 			{
-				float nx = xOffset + ( dx*(x/(float) mapSize ) );
-				float ny = yOffset + ( dy*(y/(float) mapSize ) );
+				float nx = xOffset + x*scalingFactor;
+				float ny = yOffset + y*scalingFactor;
 				
-		        float sum = (float) noise2(nx,ny);
-		        sum = (sum + 1)/2.0f;
-				result[y*mapSize+x]= sum;
+				double sum = 0.0f;
+				amplitude = 1.0f;
+				int frequency = 1 << octaveCount;
+				for (int octave = octaveCount - 1; octave >= 0; octave--)
+				{
+					amplitude *= persistance;
+			        double value = noise2(nx*frequency,ny*frequency); // range -1...1
+			        value = (value + 1)/2.0f;
+			        sum += value*amplitude;
+			        frequency = frequency >> 1;
+				}
+				result[ptr++]= (float) (sum / totalAmplitude);
 			}
 		}
 		return result;
 	}
-	
-	
 
 	// 4D simplex noise
 	public double noise4(double x, double y, double z, double w) {

@@ -20,10 +20,16 @@ import com.badlogic.gdx.math.Vector3;
 
 public class DefaultNoiseGenerator 
 {
-	private static final boolean ANTI_ALIAS = false;
-	public static final float TILE_SIZE=3f;
+	private static final float PERSISTANCE = 3f;
+	private static final int OCTAVES = 6;
+	public static final float TILE_SIZE=0.7f;
+	private static final int MAP_SIZE = 256;
 	
-	private final int[] colorRange = createLandscapeGradient() ;// createBlackWhiteGradient(); // 
+	private static final boolean ANTI_ALIAS = false;	
+	
+	private final int[] blackWhiteGradient = createBlackWhiteGradient();
+	private final int[] landscapeGradient = createLandscapeGradient();
+	private int[] colorRange = landscapeGradient;
 
 	private final int heightMapSize;
 
@@ -36,14 +42,14 @@ public class DefaultNoiseGenerator
 
 	public static void main(String[] args)
 	{
-		new DefaultNoiseGenerator(512).test();
+		new DefaultNoiseGenerator(MAP_SIZE).test();
 	}
 
 	protected void test() 
 	{
 		JPanel panel = new JPanel() {
 
-			private long seed = System.currentTimeMillis();
+			private long seed = 0xdeadbeef; // System.currentTimeMillis();
 			
 			private boolean doBlending = false;
 			
@@ -62,6 +68,14 @@ public class DefaultNoiseGenerator
 					public void keyTyped(KeyEvent e)
 					{
 						switch( e.getKeyChar() ) {
+							case 'g':
+								if ( colorRange == blackWhiteGradient ) {
+									colorRange = landscapeGradient;
+								} else {
+									colorRange = blackWhiteGradient;
+								}
+								repaint();
+								break;
 							case 'b':
 								doBlending = !doBlending;
 								repaint();
@@ -136,12 +150,21 @@ public class DefaultNoiseGenerator
 			private BufferedImage createBlendedImage(float x,float y) 
 			{
 				final float[] noise = createNoise2D( x, y , seed );
-				return blendTextures( stones , grass , noise , 0.3f );
+				return blendTextures( stones , grass , noise , 0.0f );
 			}			
 			
 			private BufferedImage getImage(float x,float y) 
 			{
-				return heightMapToTexture(createNoise2D(x,y,seed), heightMapSize );
+				long time = -System.currentTimeMillis();
+				float[] noise2d = createNoise2D(x,y,seed);
+				time += System.currentTimeMillis();
+				System.out.println("Noise generation: "+time+" ms");
+				
+				time = -System.currentTimeMillis();
+				BufferedImage image= heightMapToTexture(noise2d, heightMapSize );
+				time += System.currentTimeMillis();
+				System.out.println("Image generation: "+time+" ms");				
+				return image;
 			}
 		};
 
@@ -162,7 +185,7 @@ public class DefaultNoiseGenerator
 		if ( simplexNoise == null || this.seed != seed ) {
 			simplexNoise = new SimplexNoise(seed);
 		}
-		return simplexNoise.createHeightMap( x ,y , heightMapSize , TILE_SIZE , 1 , 0.5f );
+		return simplexNoise.createHeightMap( x ,y , heightMapSize , TILE_SIZE , OCTAVES , PERSISTANCE );
 	}
 
 	private BufferedImage blendTextures(BufferedImage texture1,BufferedImage texture2,float[] heightMap,float minValue) {
@@ -176,9 +199,6 @@ public class DefaultNoiseGenerator
 		float xScale = heightMapSize / (float) texture1.getWidth();
 		float yScale = heightMapSize / (float) texture1.getHeight();
 
-		float min = Float.MAX_VALUE;
-		float max = Float.MIN_VALUE;
-		
 		for ( int x = 0 ; x < texture1.getWidth() ; x++ ) 
 		{
 			for ( int y = 0 ; y < texture1.getHeight() ; y++ ) 
@@ -187,9 +207,6 @@ public class DefaultNoiseGenerator
 				int hx = (int) (xScale*x);
 				int hy = (int) (yScale*y);
 				float alpha = heightMap[hx+hy*heightMapSize];
-				
-				min = Math.min(min,alpha );
-				max = Math.max(max,alpha);	
 				
 				if ( alpha >= minValue  ) 
 				{
@@ -201,8 +218,6 @@ public class DefaultNoiseGenerator
 				}
 			}
 		}
-		
-		System.out.println("ALPHA: min: "+min+" / max: "+max);
 		return result;
 	}
 	
@@ -235,18 +250,14 @@ public class DefaultNoiseGenerator
 	private BufferedImage heightMapToTexture(float[] heightMap, int heightMapSize)
 	{
 		final BufferedImage img = new BufferedImage(heightMapSize,heightMapSize,BufferedImage.TYPE_INT_ARGB);
+		int ptr = 0;
 		for ( int z1 = 0 ; z1 < heightMapSize ; z1++ ) 
 		{        
 			for ( int x1 = 0 ; x1 < heightMapSize ; x1++ ) 
 			{
-				float height = heightMap[ x1 + z1 * heightMapSize ];
+				float height = heightMap[ ptr++ ];
 				int index = (int) (height*255.0f);
-				if ( index < 0 ) {
-					index = 0;
-				} else if ( index > 255 ) {
-					index = 255;
-				}
-				img.setRGB( x1 , z1 , colorRange[ index ] | (255 << 24));
+				img.setRGB( x1 , z1 , colorRange[ index & 0xff] | (255 << 24));
 			}
 		}
 		return img;
