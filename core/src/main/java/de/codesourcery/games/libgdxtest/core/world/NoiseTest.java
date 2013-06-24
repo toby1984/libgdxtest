@@ -29,13 +29,14 @@ import javax.swing.JTextField;
 
 public class NoiseTest 
 {
-    private static final int MAP_SIZE = 256;
+    private static final int MAP_SIZE = 512;
     
     private static final boolean ANTI_ALIAS = false;   
     
     private float persistance = 0.3f;
     private int octaves = 3;
     private float tileSize=2f;
+    private float groundLevel=0.0f;
     
     private final int[] blackWhiteGradient = TextureUtils.createBlackWhiteGradient();
     private final int[] landscapeGradient = TextureUtils.createLandscapeGradient();
@@ -213,7 +214,7 @@ public class NoiseTest
                         System.out.println("Noise generation: "+time+" ms");
                         
                         time = -System.currentTimeMillis();
-                        image[0]= TextureUtils.heightMapToTexture(noise2d, heightMapSize , colorGradient);
+                        image[0]= TextureUtils.heightMapToImage(noise2d, heightMapSize , colorGradient , groundLevel );
                         time += System.currentTimeMillis();
                         System.out.println("Image generation: "+time+" ms");
                         } finally {
@@ -286,7 +287,21 @@ public class NoiseTest
             }
         });
         tileSize.setColumns(5);
-        addTextField(panel,2,"Zoom",tileSize);          
+        addTextField(panel,2,"Zoom",tileSize);         
+        
+        // ground level
+        final JTextField groundLevel = new JTextField( Float.toString( NoiseTest.this.groundLevel ) );
+        groundLevel.addActionListener( new ActionListener() {
+            
+            @Override
+            public void actionPerformed(ActionEvent e)
+            {
+                NoiseTest.this.groundLevel = Float.parseFloat( groundLevel.getText() );
+                frame.repaint();
+            }
+        });
+        groundLevel.setColumns(5);
+        addTextField(panel,3,"Ground level",groundLevel);                  
         
         return panel;
     }

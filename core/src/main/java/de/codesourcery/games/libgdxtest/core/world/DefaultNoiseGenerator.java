@@ -1,5 +1,7 @@
 package de.codesourcery.games.libgdxtest.core.world;
 
+import com.badlogic.gdx.graphics.Mesh;
+
 
 public class DefaultNoiseGenerator 
 {

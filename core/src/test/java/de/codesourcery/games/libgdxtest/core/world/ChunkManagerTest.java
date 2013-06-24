@@ -175,7 +175,7 @@ public class ChunkManagerTest extends TestCase {
 		public final Location loc;
 
 		public MyTile(Location loc) {
-			super(loc.x,loc.y);
+			super(loc.x,loc.y,null);
 			this.loc = loc;
 		}
 		@Override

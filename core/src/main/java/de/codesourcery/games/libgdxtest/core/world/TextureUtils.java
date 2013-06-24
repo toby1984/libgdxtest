@@ -7,6 +7,9 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Pixmap.Format;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.math.Vector3;
 
 public class TextureUtils
@@ -70,21 +73,59 @@ public class TextureUtils
         return a << 24 | ((int) r) << 16 | ((int) g) << 8 | ((int) b);
     }
 
-    public static BufferedImage heightMapToTexture(float[] heightMap, int heightMapSize,int[] colorGradient)
+    public static BufferedImage heightMapToImage(float[] heightMap, int heightMapSize,int[] colorGradient,float groundLevel)
     {
         final BufferedImage img = new BufferedImage(heightMapSize,heightMapSize,BufferedImage.TYPE_INT_ARGB);
         int ptr = 0;
+        float scale = 1.0f/(1.0f - groundLevel);
         for ( int z1 = 0 ; z1 < heightMapSize ; z1++ ) 
         {        
             for ( int x1 = 0 ; x1 < heightMapSize ; x1++ ) 
             {
                 float height = heightMap[ ptr++ ];
-                int index = (int) (height*255.0f);
+                int index;
+                if ( height >= groundLevel ) {
+                    index = (int) ((height-groundLevel)*scale*255.0f);
+                } else {
+                    index =0;
+                }
                 img.setRGB( x1 , z1 , colorGradient[ index & 0xff] | (255 << 24));
             }
         }
         return img;
     }
+    
+    public static Texture heightMapToTexture(float[] heightMap, int heightMapSize,int[] colorGradient,float groundLevel)
+    {
+        Pixmap pixmap = new Pixmap( heightMapSize,heightMapSize,Format.RGBA8888);
+        int ptr = 0;
+        float scale = 1.0f/(1.0f - groundLevel);
+        for ( int z1 = 0 ; z1 < heightMapSize ; z1++ ) 
+        {        
+            for ( int x1 = 0 ; x1 < heightMapSize ; x1++ ) 
+            {
+                float height = heightMap[ ptr++ ];
+                int index;
+                if ( height >= groundLevel ) {
+                    index = (int) ((height-groundLevel)*scale*255.0f);
+                } else {
+                    index =0;
+                }
+                pixmap.drawPixel( x1 , z1 , colorGradient[ index & 0xff] << 8 | 255 );
+            }
+        }
+        
+        for ( int x = 0 ; x < heightMapSize ; x++ ) 
+        {
+            pixmap.drawPixel( x , 0 , 0xff0000ff );
+            pixmap.drawPixel( x , heightMapSize-1 , 0xff0000ff );
+            pixmap.drawPixel( 0 , x , 0xff0000ff );
+            pixmap.drawPixel( heightMapSize-1 , x , 0xff0000ff );
+        }
+        final Texture result = new Texture(pixmap);
+        pixmap.dispose();
+        return result;
+    }    
     
     public static BufferedImage createTexture(File file,int width,int height) 
     {

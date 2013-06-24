@@ -11,6 +11,6 @@ public class MainDesktop
 	{
 		LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
 		config.useGL20 = false;
-		new LwjglApplication(new Main(), config);
+		LwjglApplication application = new LwjglApplication(new Main(), config);
 	}
 }

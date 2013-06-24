@@ -10,14 +10,14 @@ import com.badlogic.gdx.math.collision.BoundingBox;
 public final class Entity implements ITickListener,IDrawable
 {
     private static final float PLAYER_SPEED = 20f;
-    private static final float PLAYER_MAX_ACCELERATION = 25f;
+    private static final float PLAYER_MAX_VELOCITY = 25f;
     
     public static final float OUTER_RADIUS_IN_PIXELS = 25f;
     public static final float INNER_RADIUS_IN_PIXELS = 15f;
     
     public final BoundingBox aabb = new BoundingBox();
     
-    public final Vector2 acceleration = new Vector2();
+    public final Vector2 velocity = new Vector2();
     public final Vector2 gunTip = new Vector2();
     
     public final Vector2 position;
@@ -50,7 +50,7 @@ public final class Entity implements ITickListener,IDrawable
     
     public Vector2 getAcceleration()
     {
-        return acceleration;
+        return velocity;
     }
     
     public void shoot(GameWorld world) 
@@ -69,8 +69,8 @@ public final class Entity implements ITickListener,IDrawable
     
     public void setAcceleration(float x,float y)
     {
-        this.acceleration.x = x;
-        this.acceleration.y = y;
+        this.velocity.x = x;
+        this.velocity.y = y;
     }
     
     public void setOrientation(float x,float y)
@@ -143,34 +143,34 @@ public final class Entity implements ITickListener,IDrawable
 
     public void moveUp() 
     {
-        acceleration.y += PLAYER_SPEED;
+        velocity.y += PLAYER_SPEED;
         clampAcceleration();
         positionChanged();
     }
     
     public void moveDown() {
-        acceleration.y -= PLAYER_SPEED;
+        velocity.y -= PLAYER_SPEED;
         clampAcceleration();
         positionChanged();
     }
     
     public void moveLeft() {
-        acceleration.x -= PLAYER_SPEED;
+        velocity.x -= PLAYER_SPEED;
         clampAcceleration();
         positionChanged();
     }
     
     public void moveRight() {
-        acceleration.x += PLAYER_SPEED;
+        velocity.x += PLAYER_SPEED;
         clampAcceleration( );
         positionChanged();
     }
     
     private void clampAcceleration() 
     {
-        float len = acceleration.len();
-        if ( len > PLAYER_MAX_ACCELERATION) {
-            acceleration.scl( PLAYER_MAX_ACCELERATION / len );
+        float len = velocity.len();
+        if ( len > PLAYER_MAX_VELOCITY) {
+            velocity.scl( PLAYER_MAX_VELOCITY / len );
         }
     }    
     
@@ -206,25 +206,25 @@ public final class Entity implements ITickListener,IDrawable
     {
         if ( isInMotion() ) 
         {
-           float deltaPosX = acceleration.x * deltaSeconds*20;
-           float deltaPosY = acceleration.y * deltaSeconds*20;
+           float deltaPosX = velocity.x * deltaSeconds*20;
+           float deltaPosY = velocity.y * deltaSeconds*20;
            
            position.x += deltaPosX;
            position.y += deltaPosY;
            
            positionChanged();
            
-           acceleration.x *= 0.95f;
-           acceleration.y *= 0.95f;
+           velocity.x *= 0.95f;
+           velocity.y *= 0.95f;
         } else {
-            acceleration.x = acceleration.y = 0;
+            velocity.x = velocity.y = 0;
         }
         return isAlive;
     }
 
     public final boolean isInMotion()
     {
-        return Math.abs( acceleration.x ) > 0.70 || Math.abs( acceleration.y ) > 0.70;
+        return Math.abs( velocity.x ) > 0.70 || Math.abs( velocity.y ) > 0.70;
     }
 
     @Override
