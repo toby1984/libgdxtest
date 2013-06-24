@@ -1,6 +1,8 @@
 package de.codesourcery.games.libgdxtest.core.world;
 
+import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -14,6 +16,8 @@ import com.badlogic.gdx.math.Vector3;
 
 public class TextureUtils
 {
+	private static final boolean DEBUG_RENDER_TILE_BORDERS = false;
+	
     public static BufferedImage blendTextures(BufferedImage texture1,BufferedImage texture2,float[] heightMap,int heightMapSize,float minValue) {
         
         if ( texture1.getWidth() != texture2.getWidth() || texture1.getHeight() != texture2.getHeight()) {
@@ -95,7 +99,7 @@ public class TextureUtils
         return img;
     }
     
-    public static Texture heightMapToTexture(float[] heightMap, int heightMapSize,int[] colorGradient,float groundLevel)
+    public static Texture heightMapToTexture(float[] heightMap, int heightMapSize,int[] colorGradient,float groundLevel,String debugText)
     {
         Pixmap pixmap = new Pixmap( heightMapSize,heightMapSize,Format.RGBA8888);
         int ptr = 0;
@@ -115,13 +119,42 @@ public class TextureUtils
             }
         }
         
-        for ( int x = 0 ; x < heightMapSize ; x++ ) 
+        if ( DEBUG_RENDER_TILE_BORDERS ) 
         {
-            pixmap.drawPixel( x , 0 , 0xff0000ff );
-            pixmap.drawPixel( x , heightMapSize-1 , 0xff0000ff );
-            pixmap.drawPixel( 0 , x , 0xff0000ff );
-            pixmap.drawPixel( heightMapSize-1 , x , 0xff0000ff );
+	        for ( int x = 0 ; x < heightMapSize ; x++ ) 
+	        {
+	            pixmap.drawPixel( x , 0 , 0xff0000ff ); // RED
+	            pixmap.drawPixel( x , heightMapSize-1 , 0x00ff00ff ); // GREEN
+	            pixmap.drawPixel( 0 , x , 0x0000ffff ); // BLUE
+	            pixmap.drawPixel( heightMapSize-1 , x , 0xff00ffff );
+	        }
         }
+        
+        if ( debugText != null ) 
+        {
+	        BufferedImage image = new BufferedImage(300,20,BufferedImage.TYPE_INT_RGB);
+	        Graphics2D graphics = image.createGraphics();
+	        graphics.setColor( Color.WHITE );
+	        graphics.drawString( debugText , 0 , 10 );
+	        Rectangle2D bounds = graphics.getFontMetrics().getStringBounds( debugText , graphics );
+	        
+	        int xCenter = heightMapSize/2;
+	        int yCenter = heightMapSize/2;
+	        
+	        double xMin = Math.min( bounds.getWidth() , 300 );
+	        double yMin = Math.min( bounds.getHeight() , 20 );
+	        
+			for ( int x = 0 ; x < xMin ; x++ ) 
+	        {
+				for ( int y = 0 ; y < yMin ; y++ ) {
+	        		int col = image.getRGB( x,y );
+	        		if ( col != 0xff000000 ) {
+	        			pixmap.drawPixel( xCenter+x , yCenter+y , col << 8 | 0xff );
+	        		}
+	        	}
+	        }
+        }
+        
         final Texture result = new Texture(pixmap);
         pixmap.dispose();
         return result;

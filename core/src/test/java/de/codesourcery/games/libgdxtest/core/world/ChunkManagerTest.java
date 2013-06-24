@@ -151,7 +151,7 @@ public class ChunkManagerTest extends TestCase {
 		@Override
 		public void unloadTile(Tile tile) {
 			Location loc = ((MyTile) tile).loc;
-			System.out.println("Unload: "+loc);
+			System.out.println("UNLOAD: "+loc);
 			unloaded.add( loc );
 		}
 		
@@ -333,6 +333,7 @@ public class ChunkManagerTest extends TestCase {
 		tileManager.unloaded.clear();
 		
 		// test
+		System.out.println("======================");
 		chunkManager.moveCameraToTile( 0 , 1 );
 		
 		// verify

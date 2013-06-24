@@ -44,16 +44,21 @@ public class ChunkManager
     {
         if ( reloadWholeChunk ) 
         {
-            int x = cameraTileX-1; 
-            for ( int col = 0 ; col < 3 ; col++ , x++ ) 
-            { 
-                int y = cameraTileY+1;
-                for ( int row = 0 ; row < 3 ; row++ , y-- ) 
-                {
-                    final Tile tile = tileManager.loadTile( x , y );
-                    currentChunk[ row * 3 + col ] = tile;
-                }
-            }
+        	currentChunk[ 0 ] = tileManager.loadTile( cameraTileX - 1 , cameraTileY+1 );
+        	currentChunk[ 1 ] = tileManager.loadTile( cameraTileX     , cameraTileY+1 );
+        	currentChunk[ 2 ] = tileManager.loadTile( cameraTileX + 1 , cameraTileY+1 );
+        	
+        	currentChunk[ 3 ] = tileManager.loadTile( cameraTileX - 1 , cameraTileY   );
+        	currentChunk[ 4 ] = tileManager.loadTile( cameraTileX     , cameraTileY   );
+        	currentChunk[ 5 ] = tileManager.loadTile( cameraTileX + 1 , cameraTileY   );
+        	
+        	currentChunk[ 6 ] = tileManager.loadTile( cameraTileX - 1 , cameraTileY-1 );
+        	currentChunk[ 7 ] = tileManager.loadTile( cameraTileX     , cameraTileY-1 );
+        	currentChunk[ 8 ] = tileManager.loadTile( cameraTileX + 1 , cameraTileY-1 );
+        	
+            System.out.println("Center: "+cameraTileX+" / "+cameraTileY);
+            printChunk(currentChunk);
+            reloadWholeChunk=false;
         }
         return currentChunk;
     }
@@ -94,12 +99,12 @@ public class ChunkManager
         camera.update(true);
 
         // world (0,0) is at center of tile at (0,0), adjust coordinates by half tile size
-        float trueX = camera.position.x - Tile.HALF_TILE_WIDTH;
-        float trueY = camera.position.y - Tile.HALF_TILE_HEIGHT;
+        float trueX = camera.position.x+Tile.HALF_TILE_WIDTH;
+        float trueY = (camera.position.y+Tile.HALF_TILE_HEIGHT);
 
         // tile 'world' coordinates 
-        int newCameraTileX = (int) (trueX / Tile.TILE_WIDTH);
-        int newCameraTileY = (int) (trueY / Tile.TILE_HEIGHT);
+        int newCameraTileX = (int) Math.floor(trueX / Tile.WIDTH);
+        int newCameraTileY = (int) Math.floor(trueY / Tile.HEIGHT);
 
         if ( newCameraTileX == cameraTileX && newCameraTileY == cameraTileY ) 
         {
@@ -107,32 +112,49 @@ public class ChunkManager
             return false;
         }
         // camera moved to different tile, load adjacent tiles
+        System.out.println("Camera: "+camera.position+" => tile: "+newCameraTileX+" / "+newCameraTileY);
         moveCameraToTile( newCameraTileX , newCameraTileY );
         return true;
     }
 
     public void renderCurrentChunk(SpriteBatch renderer) 
     {
+    	renderer.begin();
+    	renderer.setProjectionMatrix( camera.combined );
+    	
         final Tile[] tiles = getCurrentChunk();
 
-        float xOffset = camera.position.x; 
-        float yOffset = camera.position.y; 
+        final float xOffset = -0.5f*Tile.WIDTH + ( cameraTileX*Tile.WIDTH )-Tile.WIDTH;
+        final float yOffset = -0.5f*Tile.HEIGHT + ( cameraTileY*Tile.HEIGHT )+Tile.HEIGHT;
 
-        xOffset -= 1.5f*Tile.TILE_WIDTH;
-        yOffset += 1.5f*Tile.TILE_HEIGHT;
+        float xScreen = xOffset;
+        float yScreen = yOffset;
+        
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[0].background );
+        xScreen += Tile.WIDTH;
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[1].background );
+        xScreen += Tile.WIDTH;
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[2].background );
 
-        for ( int y = -1 ; y < 2 ; y++ ) 
-        {
-            for ( int x = -1 ; x < 2 ; x++) 
-            {
-                final Tile tile = tiles[(1+x)+(1+y)*3 ];
-
-                float xScreen = xOffset + x * Tile.TILE_WIDTH;
-                float yScreen = yOffset + y * Tile.TILE_HEIGHT;
-
-                renderQuad( xScreen,yScreen , Tile.TILE_WIDTH,Tile.TILE_HEIGHT , tile.background );
-            }
-        }
+        xScreen = xOffset;
+        yScreen -= Tile.HEIGHT;
+        
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[3].background );
+        xScreen += Tile.WIDTH;
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[4].background );
+        xScreen += Tile.WIDTH;
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[5].background );
+        
+        xScreen = xOffset;
+        yScreen -= Tile.HEIGHT;
+        
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[6].background );
+        xScreen += Tile.WIDTH;
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[7].background );
+        xScreen += Tile.WIDTH;
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[8].background );
+        
+        renderer.end();
     }
     
     private void renderQuad(float xStart,float yStart,float cellWidth,float cellHeight,Texture texture) 
@@ -152,8 +174,6 @@ public class ChunkManager
         float x1 = x0 + cellWidth;
         float y1 = y0 + cellHeight;
         
-        System.out.println("Quad: "+x0+" / "+y0+" => "+x1+" / "+y1);
-
         // triangle no. #1
         vertices[vertexPtr++] = x0;
         vertices[vertexPtr++] = y0;
@@ -220,7 +240,7 @@ public class ChunkManager
 
         cameraTileX = newCameraTileX;
         cameraTileY = newCameraTileY;	
-
+        
         switch( dx ) 
         {
             case -1:
@@ -297,7 +317,9 @@ public class ChunkManager
                         // dx = 0 , dy = 0 => no changes
                         break;
                     case 1:
-                        // up						
+                        // up		
+                    	tileManager.unloadTiles( currentChunk[6],currentChunk[7],currentChunk[8]);
+                    	
                         currentChunk[6] = currentChunk[3];
                         currentChunk[7] = currentChunk[4];
                         currentChunk[8] = currentChunk[5];

@@ -96,7 +96,7 @@ public class GameScreen implements Screen
         
         if (  playerHasMoved ) 
         {
-            maybeScrollBackgroundAndMoveCamera();
+            maybeMoveCamera();
         }
     }
     
@@ -105,6 +105,8 @@ public class GameScreen implements Screen
         // clear display
         Gdx.graphics.getGL10().glClearColor( 0 , 0, 0, 1 );
         Gdx.graphics.getGL10().glClear( GL10.GL_COLOR_BUFFER_BIT | GL10.GL_DEPTH_BUFFER_BIT );
+        
+        chunkManager.camera.apply( Gdx.gl10 );
         
         // render background
         chunkManager.renderCurrentChunk( backgroundBatch );
@@ -167,7 +169,7 @@ public class GameScreen implements Screen
         player.setOrientation( newOrientX , newOrientY );
     }
 
-    private void maybeScrollBackgroundAndMoveCamera()
+    private void maybeMoveCamera()
     {
         // transform player position to view coordinates
         final Vector3 playerPosInScreenCoordinates = new Vector3( player.position.x , player.position.y , 0 );
@@ -224,6 +226,7 @@ public class GameScreen implements Screen
             
             Vector3 cameraDelta = new Vector3( player.position.x , player.position.y , chunkManager.camera.position.z )
                 .sub(playerPosWorldCoordinates.x ,playerPosWorldCoordinates.y , 0);
+            
             try 
             {
                 chunkManager.moveCameraRelative( cameraDelta.x , cameraDelta.y );
