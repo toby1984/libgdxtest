@@ -38,7 +38,23 @@ public class NavMeshGenerator
         return result;
     }
     
-    private float calcCellAverageHeight(float cellX,float cellY , int tileSize,float[] heightmap,int heightmapSize) 
+    public static float[] sample(float[] heightmap,int heightmapSize,int tileSize) 
+    {
+        final int meshSize = heightmapSize / tileSize;
+        final NavMesh result = new NavMesh( meshSize );
+        
+        for ( int x = 0 ; x < meshSize ; x++ ) 
+        {
+            for ( int y = 0 ; y < meshSize ; y++) 
+            {
+                float avgHeight = calcCellAverageHeight( x * tileSize  , y * tileSize , tileSize , heightmap , heightmapSize );
+                result.set( x,y, avgHeight );
+            }
+        }
+        return result.height;
+    }
+    
+    private static float calcCellAverageHeight(float cellX,float cellY , int tileSize,float[] heightmap,int heightmapSize) 
     {
         float sum=0.0f;
         int cellCount=0;

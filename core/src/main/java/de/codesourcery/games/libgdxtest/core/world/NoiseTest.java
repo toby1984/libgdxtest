@@ -38,15 +38,15 @@ import de.codesourcery.games.libgdxtest.core.world.PathFinder.PathNode;
 
 public class NoiseTest 
 {
-    private static final int MAP_SIZE = 256; 
+    private static final int MAP_SIZE = 1024; 
     private static final boolean RENDER_NAV_CELLS = false;
     private static final boolean ANTI_ALIAS = false;   
 
-    private float persistance = 32f;
-    private int octaves = 3;
-    private float tileSize=2f;
-    private float groundLevel=0.0f;
-    private float walkableGroundLevel=0.0f;
+    private float persistance = 1.23f;
+    private int octaves = 8;
+    private float tileSize=0.1f;
+    private float groundLevel=0.3f;
+    private float walkableGroundLevel=0.5f;
 
     private final int[] blackWhiteGradient = TextureUtils.createBlackWhiteGradient();
     private final int[] landscapeGradient = TextureUtils.createLandscapeGradient();
@@ -205,7 +205,8 @@ public class NoiseTest
         } else {
             mapIndex=3;
         }
-        return noiseMaps[mapIndex][(x%heightMapSize)+(y%heightMapSize)*heightMapSize];
+        float[] map = noiseMaps[mapIndex];
+		return map == null ? 0 : map[(x%heightMapSize)+(y%heightMapSize)*heightMapSize];
     }
     
     private void findPath(Point src,Point dst) 
@@ -577,19 +578,34 @@ public class NoiseTest
         if ( simplexNoise == null || this.seed != seed ) {
             simplexNoise = new SimplexNoise(seed);
         }
-        if ( 1 != 2) {
-        	 return simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , octaves , persistance );
+        float[] high = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , octaves , persistance );
+        if ( 1 == 2) {
+        	 return high;
         }
-        float[] low = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , 1 , 32 );
-        float[] middle  = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize, 1 , 32 );
-        float[] high = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , 6 ,1f );
+        final int middleSize= heightMapSize / 16;
+        final float middleScale = (heightMapSize / 16.0f)/heightMapSize;
+        float[] middle = NavMeshGenerator.sample( high , heightMapSize , 16 );
+        
+        final int lowSize = heightMapSize / 2;
+        final float lowScale = (heightMapSize / 2.0f)/heightMapSize;
+        float[] low = NavMeshGenerator.sample( high  , heightMapSize , 2 );
         
         float[] result = new float[heightMapSize*heightMapSize];
-        for ( int i = 0 ; i < heightMapSize*heightMapSize ; i++ ) 
+        for ( int iy = 0 ; iy < heightMapSize ; iy++) 
         {
-        	result[i] = low[i] * 0.6f + middle[i] * 0.2f + high[i]*0.2f;
+        	for ( int ix = 0 ; ix < heightMapSize ; ix++) 
+        	{
+        		final int lix = (int) (ix*lowScale);
+        		final int liy = (int) (iy*lowScale);
+        		
+        		final int mix = (int) (ix*middleScale);
+        		final int miy = (int) (iy*middleScale);
+        		
+        		result[ix+iy*heightMapSize] = low[lix+liy*lowSize] * 0.7f + 
+        				                      middle[mix+miy*middleSize] * 0.25f + 
+        				                      high[ix+iy*heightMapSize]*0.05f;
+        	}
         }
         return result;
-                                   
     }
 }
