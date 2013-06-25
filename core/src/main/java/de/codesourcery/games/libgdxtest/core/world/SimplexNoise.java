@@ -320,13 +320,15 @@ public class SimplexNoise { // Simplex noise in 2D, 3D and 4D
 				double sum = 0.0f;
 				amplitude = 1.0f;
 				int frequency = 1 << octaveCount;
+				float freqDistortion= 0.0f;
 				for (int octave = octaveCount - 1; octave >= 0; octave--)
 				{
 					amplitude *= persistance;
-			        double value = noise2(nx*frequency,ny*frequency); // range -1...1
+			        double value = noise2(nx*(frequency+freqDistortion),ny*(frequency+freqDistortion)); // range -1...1
 			        value = (value + 1)/2.0f;
 			        sum += value*amplitude;
 			        frequency = frequency >> 1;
+					freqDistortion += 2.31242f;
 				}
 				result[ptr++]= (float) (sum / totalAmplitude);
 			}

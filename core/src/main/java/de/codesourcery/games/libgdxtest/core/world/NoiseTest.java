@@ -39,7 +39,7 @@ import de.codesourcery.games.libgdxtest.core.world.PathFinder.PathNode;
 public class NoiseTest 
 {
     private static final int MAP_SIZE = 256; 
-
+    private static final boolean RENDER_NAV_CELLS = false;
     private static final boolean ANTI_ALIAS = false;   
 
     private float persistance = 32f;
@@ -259,8 +259,8 @@ public class NoiseTest
 
     protected void test() 
     {
-        stones = TextureUtils.createTexture( new File("/home/tgierke/workspace/libgdxtest/assets/stones.png") , 1024 , 1024 );              
-        grass = TextureUtils.createTexture( new File("/home/tgierke/workspace/libgdxtest/assets/grass.png") , 1024 , 1024 );
+        stones = TextureUtils.createTexture( new File("/home/tobi/workspace/libgdxtest/assets/stones.png") , 1024 , 1024 );              
+        grass = TextureUtils.createTexture( new File("/home/tobi/workspace/libgdxtest/assets/grass.png") , 1024 , 1024 );
 
         panel = new JPanel() 
         {
@@ -359,9 +359,10 @@ public class NoiseTest
                             g.setColor( new Color( blackWhiteGradient[ index & 0xff ] | 0xff000000 ) );
                             g.fillRect( round(x1) , round(y1) , round(cellWidth) , round(cellHeight) );
                         }
-                        
-                      g.setColor( Color.WHITE );
-                      g.drawRect( round(x1) , round(y1) , round(cellWidth) , round(cellHeight) );
+                      if ( RENDER_NAV_CELLS ) {
+                    	  g.setColor( Color.WHITE );
+                    	  g.drawRect( round(x1) , round(y1) , round(cellWidth) , round(cellHeight) );
+                      }
                     }
                 }
             }
@@ -576,6 +577,19 @@ public class NoiseTest
         if ( simplexNoise == null || this.seed != seed ) {
             simplexNoise = new SimplexNoise(seed);
         }
-        return simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , octaves , persistance );
+        if ( 1 != 2) {
+        	 return simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , octaves , persistance );
+        }
+        float[] low = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , 1 , 32 );
+        float[] middle  = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize, 1 , 32 );
+        float[] high = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , 6 ,1f );
+        
+        float[] result = new float[heightMapSize*heightMapSize];
+        for ( int i = 0 ; i < heightMapSize*heightMapSize ; i++ ) 
+        {
+        	result[i] = low[i] * 0.6f + middle[i] * 0.2f + high[i]*0.2f;
+        }
+        return result;
+                                   
     }
 }

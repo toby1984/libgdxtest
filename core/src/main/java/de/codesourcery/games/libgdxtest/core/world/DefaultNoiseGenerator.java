@@ -1,11 +1,10 @@
 package de.codesourcery.games.libgdxtest.core.world;
 
-import com.badlogic.gdx.graphics.Mesh;
 
 
 public class DefaultNoiseGenerator 
 {
-	private final int heightMapSize;
+	public final int heightMapSize;
 	private SimplexNoise simplexNoise;
 	private long seed;
 	
