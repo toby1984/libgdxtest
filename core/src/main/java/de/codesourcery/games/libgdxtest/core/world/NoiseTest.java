@@ -35,10 +35,15 @@ import javax.swing.JTextField;
 import de.codesourcery.games.libgdxtest.core.world.NavMeshGenerator.NavMesh;
 import de.codesourcery.games.libgdxtest.core.world.PathFinder.Path;
 import de.codesourcery.games.libgdxtest.core.world.PathFinder.PathNode;
+import de.codesourcery.games.libgdxtest.core.world.TextureUtils.GradientEntry;
 
 public class NoiseTest 
 {
-    private static final int MAP_SIZE = 1024; 
+    private static final File GRASS_TEXTURE = new File("/home/tgierke/workspace/libgdxtest/assets/grass.png");
+    
+    private static final File STONE_TEXTURE = new File("/home/tgierke/workspace/libgdxtest/assets/stones.png");
+    
+    private static final int MAP_SIZE = 512; 
     private static final boolean RENDER_NAV_CELLS = false;
     private static final boolean ANTI_ALIAS = false;   
 
@@ -50,7 +55,30 @@ public class NoiseTest
 
     private final int[] blackWhiteGradient = TextureUtils.createBlackWhiteGradient();
     private final int[] landscapeGradient = TextureUtils.createLandscapeGradient();
-    private int[] colorGradient = landscapeGradient;
+    private final int[] fixedGradient = TextureUtils.createFixedColorGradient( 
+            new GradientEntry(Color.BLUE , 0.0f ) ,
+            new GradientEntry(Color.YELLOW , 0.3f ),
+            new GradientEntry(Color.GREEN , 0.4f ),
+            new GradientEntry(scale(Color.GREEN,0.7f), 0.5f )
+            ); 
+    
+    private final int[][] gradients = {fixedGradient,blackWhiteGradient,landscapeGradient};
+    
+    private static Color scale(Color c,float factor) 
+    {
+        return new Color( scale( c.getRed() ,factor ) , scale( c.getGreen() ,factor )  , scale( c.getBlue() ,factor )  ); 
+    }
+    
+    private static int scale(int color,float factor) 
+    {
+        int result = (int) (color*factor);
+        if ( result < 0 ) {
+            return 0;
+        }
+        return result > 255 ? 255 : result;
+    }
+    
+    private int colorGradientIndex = 0;
 
     private final int heightMapSize;
 
@@ -119,10 +147,9 @@ public class NoiseTest
             switch( e.getKeyChar() ) 
             {
                 case 'g':
-                    if ( colorGradient == blackWhiteGradient ) {
-                        colorGradient = landscapeGradient;
-                    } else {
-                        colorGradient = blackWhiteGradient;
+                    colorGradientIndex++;
+                    if ( colorGradientIndex >= gradients.length ) {
+                        colorGradientIndex = 0;
                     }
                     frame.repaint();
                     break;
@@ -260,8 +287,8 @@ public class NoiseTest
 
     protected void test() 
     {
-        stones = TextureUtils.createTexture( new File("/home/tobi/workspace/libgdxtest/assets/stones.png") , 1024 , 1024 );              
-        grass = TextureUtils.createTexture( new File("/home/tobi/workspace/libgdxtest/assets/grass.png") , 1024 , 1024 );
+        stones = TextureUtils.createTexture( STONE_TEXTURE , 1024 , 1024 );              
+        grass = TextureUtils.createTexture( GRASS_TEXTURE , 1024 , 1024 );
 
         panel = new JPanel() 
         {
@@ -442,7 +469,7 @@ public class NoiseTest
 //                            System.out.println("Noise generation: "+time+" ms");
 
                             time = -System.currentTimeMillis();
-                            image[0]= TextureUtils.heightMapToImage(noise2d, heightMapSize , colorGradient , groundLevel );
+                            image[0]= TextureUtils.heightMapToImage(noise2d, heightMapSize , gradients[colorGradientIndex] , groundLevel );
                             time += System.currentTimeMillis();
 //                            System.out.println("Image generation: "+time+" ms");
                         } 
@@ -584,11 +611,11 @@ public class NoiseTest
         }
         final int middleSize= heightMapSize / 16;
         final float middleScale = (heightMapSize / 16.0f)/heightMapSize;
-        float[] middle = NavMeshGenerator.sample( high , heightMapSize , 16 );
+        float[] middle = NavMeshGenerator.resample( high , heightMapSize , 16 );
         
         final int lowSize = heightMapSize / 2;
         final float lowScale = (heightMapSize / 2.0f)/heightMapSize;
-        float[] low = NavMeshGenerator.sample( high  , heightMapSize , 2 );
+        float[] low = NavMeshGenerator.resample( high  , heightMapSize , 2 );
         
         float[] result = new float[heightMapSize*heightMapSize];
         for ( int iy = 0 ; iy < heightMapSize ; iy++) 

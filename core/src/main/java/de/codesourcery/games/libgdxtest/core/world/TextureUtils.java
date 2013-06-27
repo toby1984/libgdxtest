@@ -6,12 +6,23 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 
+import org.apache.commons.lang.ArrayUtils;
+
 import com.badlogic.gdx.graphics.Pixmap;
-import com.badlogic.gdx.graphics.Pixmap.Format;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Gdx2DPixmap;
 import com.badlogic.gdx.math.Vector3;
 
 public class TextureUtils
@@ -99,26 +110,58 @@ public class TextureUtils
         return img;
     }
     
+    private static Pixmap heightMapToPixMap(float[] heightMap, int heightMapSize,int[] colorGradient,float groundLevel) 
+    {
+        final int bufferSize = heightMapSize*heightMapSize* 4;
+        final ByteBuffer byteBuffer = ByteBuffer.allocate( bufferSize ).order(ByteOrder.LITTLE_ENDIAN); // 4 bytes per pixel
+        final IntBuffer intBuffer = byteBuffer.asIntBuffer();
+        float scale = 1.0f/(1.0f - groundLevel);
+        final int len = heightMapSize*heightMapSize; 
+        for ( int i = 0 ; i < len ; i++ ) 
+        {
+            // bytes per pixel = R G B A
+            float height = heightMap[ i ];
+            int index;
+            if ( height >= groundLevel ) {
+                index = (int) ((height-groundLevel)*scale*255.0f);
+            } else {
+                index =0;
+            }   
+            final int color = colorGradient[index];
+            intBuffer.put( color << 8 | 0xff );
+        }
+        intBuffer.rewind();
+        Gdx2DPixmap tmp;
+        try {
+            return new Pixmap( new Gdx2DPixmap( byteBuffer.array() , 0 ,bufferSize ,  Gdx2DPixmap.GDX2D_FORMAT_RGBA8888 ) );
+        } 
+        catch (IOException e) 
+        {
+            throw new RuntimeException(e);
+        }
+    }
+    
     public static Texture heightMapToTexture(float[] heightMap, int heightMapSize,int[] colorGradient,float groundLevel,String debugText)
     {
-        Pixmap pixmap = new Pixmap( heightMapSize,heightMapSize,Format.RGBA8888);
-        int ptr = 0;
-        float scale = 1.0f/(1.0f - groundLevel);
-        for ( int z1 = 0 ; z1 < heightMapSize ; z1++ ) 
-        {        
-            for ( int x1 = 0 ; x1 < heightMapSize ; x1++ ) 
-            {
-                float height = heightMap[ ptr++ ];
-                int index;
-                if ( height >= groundLevel ) {
-                    index = (int) ((height-groundLevel)*scale*255.0f);
-                } else {
-                    index =0;
-                }
-                pixmap.drawPixel( x1 , z1 , colorGradient[ index & 0xff] << 8 | 255 );
-            }
-        }
+        Pixmap pixmap = heightMapToPixMap(heightMap, heightMapSize, colorGradient, groundLevel); //  new Pixmap( heightMapSize,heightMapSize,Format.RGBA8888);
         
+//        int ptr = 0;
+//        float scale = 1.0f/(1.0f - groundLevel);
+//        for ( int z1 = 0 ; z1 < heightMapSize ; z1++ ) 
+//        {        
+//            for ( int x1 = 0 ; x1 < heightMapSize ; x1++ ) 
+//            {
+//                float height = heightMap[ ptr++ ];
+//                int index;
+//                if ( height >= groundLevel ) {
+//                    index = (int) ((height-groundLevel)*scale*255.0f);
+//                } else {
+//                    index =0;
+//                }
+//                pixmap.drawPixel( x1 , z1 , colorGradient[ index & 0xff] << 8 | 255 );
+//            }
+//        }
+//        
         if ( DEBUG_RENDER_TILE_BORDERS ) 
         {
 	        for ( int x = 0 ; x < heightMapSize ; x++ ) 
@@ -200,6 +243,55 @@ public class TextureUtils
                 new int[]     {   48 , 48   ,32   ,32    ,32   ,16    ,32   ,16   }
                 );
         return colorRange;
+    }
+    
+    public static final class GradientEntry 
+    {
+        public final Color color;
+        public float minValue;
+        
+        public GradientEntry(Color color, float minValue)
+        {
+            this.color = color;
+            this.minValue = minValue;
+        }
+    }
+    
+    public static int[] createFixedColorGradient(GradientEntry... entries) 
+    {
+        if ( ArrayUtils.isEmpty( entries ) ) {
+            throw new IllegalArgumentException("entries must not be empty.");
+        }
+        
+        // sort ascending by min value
+        final List<GradientEntry> tmp = new ArrayList<>(Arrays.asList(entries));
+        Collections.sort( tmp , new Comparator<GradientEntry>() {
+
+            @Override
+            public int compare(GradientEntry o1, GradientEntry o2)
+            {
+                return Double.compare(o1.minValue , o2.minValue );
+            }
+        });
+        
+        double step = 1.0/256d;
+        double value = 0.0;
+
+        final Iterator<GradientEntry> it = tmp.iterator();
+        GradientEntry current = it.next();
+        GradientEntry next = it.hasNext() ? it.next() : null;
+        
+        final int[] result = new int[256];
+        for ( int i = 0 ; i < 256 ; value +=step ,i++ ) 
+        {
+            if ( next != null && value >= next.minValue ) 
+            {
+                current = next;
+                next = it.hasNext() ? it.next() : null;
+            }
+            result[i] = current.color.getRGB();
+        }
+        return result;
     }
     
     public static int[] createBlackWhiteGradient() 

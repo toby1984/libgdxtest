@@ -130,29 +130,29 @@ public class ChunkManager
         float xScreen = xOffset;
         float yScreen = yOffset;
         
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[0].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[0].getBackgroundTexture() );
         xScreen += Tile.WIDTH;
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[1].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[1].getBackgroundTexture() );
         xScreen += Tile.WIDTH;
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[2].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[2].getBackgroundTexture() );
 
         xScreen = xOffset;
         yScreen -= Tile.HEIGHT;
         
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[3].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[3].getBackgroundTexture() );
         xScreen += Tile.WIDTH;
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[4].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[4].getBackgroundTexture() );
         xScreen += Tile.WIDTH;
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[5].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[5].getBackgroundTexture() );
         
         xScreen = xOffset;
         yScreen -= Tile.HEIGHT;
         
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[6].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[6].getBackgroundTexture() );
         xScreen += Tile.WIDTH;
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[7].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[7].getBackgroundTexture() );
         xScreen += Tile.WIDTH;
-        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[8].background );
+        renderQuad( xScreen, yScreen , Tile.WIDTH,Tile.HEIGHT , tiles[8].getBackgroundTexture() );
         
         renderer.end();
     }

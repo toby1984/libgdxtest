@@ -1,7 +1,6 @@
 package de.codesourcery.games.libgdxtest.core.world;
 
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.Texture.TextureWrap;
 
 public class Tile 
 {
@@ -13,17 +12,26 @@ public class Tile
 	
 	public final int x;
 	public final int y;
-	public final Texture background;
 	
-	public Tile(int x, int y,Texture background) 
+	private Texture backgroundTexture;
+	
+	public Tile(int x, int y) 
 	{
 		this.x = x;
 		this.y = y;
-		this.background = background;
-//		if ( background != null ) {
-//		    this.background.setWrap(TextureWrap.Repeat,TextureWrap.Repeat);
-//		}
 	}
+	
+	protected Texture maybeCreateBackgroundTexture() {
+	    return null;
+	}
+	
+	public final Texture getBackgroundTexture()
+    {
+	  if ( backgroundTexture == null ) {
+	      backgroundTexture = maybeCreateBackgroundTexture();
+	  }
+      return backgroundTexture;
+    }
 	
 	@Override
 	public String toString()
@@ -37,8 +45,15 @@ public class Tile
 	public void passivate() {
 	}
 	
-	public void dispose() 
+	public final void dispose() 
 	{
-	    background.dispose();
+	    if ( backgroundTexture != null ) 
+	    {
+	        try {
+	            backgroundTexture.dispose();
+	        } finally  {
+	            backgroundTexture=null;
+	        }
+	    }
 	}
 }

@@ -1,5 +1,10 @@
 package de.codesourcery.games.libgdxtest.core.world;
 
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+
 public class NavMeshGenerator
 {
     public static final class NavMesh {
@@ -7,10 +12,10 @@ public class NavMeshGenerator
         public final int width;
         public final float[] height;
         
-        public NavMesh(int width) 
+        public NavMesh(int width,float[] data) 
         {
             this.width = width;
-            this.height = new float[width*width];
+            this.height = data;
         }
         
         public float get(int x,int y) {
@@ -25,54 +30,69 @@ public class NavMeshGenerator
     public NavMesh generateGrid(float[] heightmap,int heightmapSize,int tileSize) 
     {
         final int meshSize = heightmapSize / tileSize;
-        final NavMesh result = new NavMesh( meshSize );
-        
-        for ( int x = 0 ; x < meshSize ; x++ ) 
-        {
-            for ( int y = 0 ; y < meshSize ; y++) 
-            {
-                float avgHeight = calcCellAverageHeight( x * tileSize  , y * tileSize , tileSize , heightmap , heightmapSize );
-                result.set( x,y, avgHeight );
-            }
-        }
+        final NavMesh result = new NavMesh( meshSize , resample( heightmap , heightmapSize , meshSize ) );
         return result;
     }
     
-    public static float[] sample(float[] heightmap,int heightmapSize,int tileSize) 
+    public static void main(String[] args)
     {
-        final int meshSize = heightmapSize / tileSize;
-        final NavMesh result = new NavMesh( meshSize );
-        
-        for ( int x = 0 ; x < meshSize ; x++ ) 
-        {
-            for ( int y = 0 ; y < meshSize ; y++) 
-            {
-                float avgHeight = calcCellAverageHeight( x * tileSize  , y * tileSize , tileSize , heightmap , heightmapSize );
-                result.set( x,y, avgHeight );
-            }
+        final int initialSize = 2048;
+        final int sampledSize = initialSize >> 2;
+        float[] in = new float[initialSize*initialSize];
+        for ( int i = 0 ; i < initialSize*initialSize ; i++ ) {
+            in[i] = 0.5f;
         }
-        return result.height;
+        
+        for ( int i = 0 ; i < 10 ; i++ ) 
+        {
+            long time = -System.currentTimeMillis();
+    //        float[] out = fastSample( in , initialSize , sampledSize );
+            float[] out = doResample( in , initialSize , sampledSize );
+            time += System.currentTimeMillis();
+            System.out.println("Sampling from "+initialSize+"x"+initialSize+" -> "+sampledSize+"x"+sampledSize+" took "+time+" ms");
+        }
     }
     
-    private static float calcCellAverageHeight(float cellX,float cellY , int tileSize,float[] heightmap,int heightmapSize) 
+    private static float[] doResample(float[] heightmap,int inputSize,int newSize) 
     {
-        float sum=0.0f;
-        int cellCount=0;
-        
-        for ( float x = cellX ; x < (cellX+tileSize) ; x+=1.0f ) 
-        {
-            for ( float y = cellY ; y < (cellY+tileSize) ; y+=1.0f ) 
-            {
-                int ix = (int) Math.floor(x);
-                int iy = (int) Math.floor(y);
-                
-                if ( ix < heightmapSize && iy < heightmapSize ) 
-                {
-                    sum += heightmap[ix+iy*heightmapSize];
-                    cellCount++;
-                }
-            }
+        // convert to 8-bit greyscale image (SEVERE loss of precision ...)
+        final BufferedImage srcImage = new BufferedImage(inputSize,inputSize,BufferedImage.TYPE_BYTE_GRAY );
+        final byte[] srcPixels = ((DataBufferByte) srcImage.getRaster().getDataBuffer()).getData();
+        final int srcLen=inputSize*inputSize;
+        for ( int i = 0 ; i < srcLen; i++) {
+            srcPixels[i] = (byte) (heightmap[i]*255f);
         }
-        return cellCount != 0 ? sum/cellCount : 1f;
-    }
+        
+        // render "image" in desired target resolution  
+        final BufferedImage dstImage = new BufferedImage(newSize,newSize,BufferedImage.TYPE_BYTE_GRAY);
+        
+        final Graphics2D graphics = dstImage.createGraphics();
+        
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        graphics.drawImage( srcImage, 0 , 0 , newSize, newSize , null );
+
+        // convert image back to float values in range 0....1
+        final byte[] dstPixels = ((DataBufferByte) dstImage.getRaster().getDataBuffer()).getData();
+        final int dstLen = newSize*newSize;
+        final float[] result = new float[ dstLen ];
+        for ( int i = 0 ; i < dstLen; i++) 
+        {
+            int value = dstPixels[i];
+            value = value & 0xff;
+            result[i] = value/255.0f;
+        }
+        return result;
+    } 
+    
+    /**
+     * Resamples a square NxN height map into size MxM.
+     * 
+     * @param heightMap input heightmap with width == height and a value range of 0...1
+     * @param inputSize input width/height 
+     * @param outputSize output width/height
+     * @return
+     */
+    public static float[] resample(float[] heightMap,int inputSize,int outputSize) {
+        return doResample(heightMap, inputSize, outputSize);
+    }    
 }
