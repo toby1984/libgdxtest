@@ -5,6 +5,9 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.event.KeyAdapter;
 import java.util.ArrayList;
@@ -177,7 +180,7 @@ public class MazeTest
     
     public static void main(String[] args)
     {
-        final Maze maze = new Maze(512);
+        final Maze maze = new Maze(640);
         MazeTest.generateMaze(maze,System.currentTimeMillis());
         
         final JPanel panel = new JPanel() {
@@ -238,8 +241,14 @@ public class MazeTest
         } );
         final JFrame frame = new JFrame("test");
         frame.setPreferredSize(new Dimension(400,200  ) );
-        frame.getContentPane().setLayout(new BorderLayout());
-        frame.getContentPane().add(panel,BorderLayout.CENTER);
+        frame.getContentPane().setLayout(new GridBagLayout());
+        GridBagConstraints cnstrs = new GridBagConstraints();
+        cnstrs.fill = GridBagConstraints.BOTH;
+        cnstrs.gridx=GridBagConstraints.REMAINDER;
+        cnstrs.gridy=GridBagConstraints.REMAINDER;
+        cnstrs.weightx=1.0;
+        cnstrs.weighty=1.0;
+        frame.getContentPane().add(panel,cnstrs);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.pack();
         frame.setVisible(true);
