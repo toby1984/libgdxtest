@@ -176,9 +176,9 @@ public class MidpointDisplacement
 		points[xMiddle+y2*size] = h3;
 		points[x1+yMiddle*size] = h4;
 		
-		subdivide( xOffset,yOffset,x1 , y1 , xMiddle , yMiddle , depth+1 );
-		subdivide( xOffset,yOffset,xMiddle , y1 , x2, yMiddle , depth+1 );
-		subdivide( xOffset,yOffset,x1 , yMiddle , xMiddle , y2 , depth+1 );
-		subdivide( xOffset,yOffset,xMiddle , yMiddle , x2 , y2 , depth+1 );
+		subdivide( xOffset+1,yOffset+1,x1 , y1 , xMiddle , yMiddle , depth+1 );
+		subdivide( xOffset+2,yOffset+1,xMiddle , y1 , x2, yMiddle , depth+1 );
+		subdivide( xOffset+1,yOffset+2,x1 , yMiddle , xMiddle , y2 , depth+1 );
+		subdivide( xOffset+2,yOffset+2,xMiddle , yMiddle , x2 , y2 , depth+1 );
 	}
 }
