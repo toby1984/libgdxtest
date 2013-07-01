@@ -32,6 +32,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
+import de.codesourcery.games.libgdxtest.core.midpoint.MidpointDisplacement;
 import de.codesourcery.games.libgdxtest.core.world.NavMeshGenerator.NavMesh;
 import de.codesourcery.games.libgdxtest.core.world.PathFinder.Path;
 import de.codesourcery.games.libgdxtest.core.world.PathFinder.PathNode;
@@ -39,9 +40,9 @@ import de.codesourcery.games.libgdxtest.core.world.TextureUtils.GradientEntry;
 
 public class NoiseTest 
 {
-    private static final File GRASS_TEXTURE = new File("/home/tgierke/workspace/libgdxtest/assets/grass.png");
+    private static final File GRASS_TEXTURE = new File("/home/tobi/workspace/libgdxtest/assets/grass.png");
     
-    private static final File STONE_TEXTURE = new File("/home/tgierke/workspace/libgdxtest/assets/stones.png");
+    private static final File STONE_TEXTURE = new File("/home/tobi/workspace/libgdxtest/assets/stones.png");
     
     private static final int MAP_SIZE = 512; 
     private static final boolean RENDER_NAV_CELLS = false;
@@ -49,9 +50,11 @@ public class NoiseTest
 
     private float persistance = 1.23f;
     private int octaves = 8;
-    private float tileSize=0.1f;
-    private float groundLevel=0.3f;
+    private int tileSize=1;
+    private float groundLevel=0.0f;
     private float walkableGroundLevel=0.5f;
+    
+    private final MidpointDisplacement midpointDisplacement = new MidpointDisplacement( MAP_SIZE , 0xdeadbeef );
 
     private final int[] blackWhiteGradient = TextureUtils.createBlackWhiteGradient();
     private final int[] landscapeGradient = TextureUtils.createLandscapeGradient();
@@ -86,7 +89,7 @@ public class NoiseTest
 
     // ===========================
 
-    private long seed = 0xdeadbeef; // System.currentTimeMillis();
+    private long seed = 0xdeadbeef; 
 
     private BufferedImage grass;
     private BufferedImage stones;       
@@ -101,8 +104,6 @@ public class NoiseTest
     private JPanel panel;
 
     private SimplexNoise simplexNoise;
-
-    private final ThreadPoolExecutor threadPool;
 
     // path finding test
     private final int navGridTileSize = 4;
@@ -263,21 +264,6 @@ public class NoiseTest
     public NoiseTest(int heightMapSize) 
     {
         this.heightMapSize = heightMapSize;
-
-        final int poolSize = Runtime.getRuntime().availableProcessors()+1;
-        BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(100);
-        ThreadFactory threadFactory = new ThreadFactory() {
-
-            @Override
-            public Thread newThread(Runnable r) 
-            {
-                Thread t = new Thread(r);
-                t.setDaemon(true);
-                return t;
-            }
-        };
-
-        threadPool = new ThreadPoolExecutor(poolSize, poolSize, 10, TimeUnit.MINUTES, workQueue, threadFactory, new CallerRunsPolicy() );
     }
 
     public static void main(String[] args)
@@ -303,8 +289,8 @@ public class NoiseTest
                 }
 
                 // 2x2 images
-                float xOffset= tileX*tileSize*0.1f;
-                float yOffset= tileY*tileSize*0.1f;
+                int xOffset= tileX;
+                int yOffset= tileY;
                 
                 int halfWidth = getWidth() / 2;
                 int halfHeight = getHeight() / 2;
@@ -431,7 +417,7 @@ public class NoiseTest
                 g.drawLine( p.x-width , p.y  , p.x+width , p.y );
             }
 
-            private void createBlendedImage(final CountDownLatch latch,final float x,final float y,final BufferedImage[] image,final int mapIndex) 
+            private void createBlendedImage(final CountDownLatch latch,final int x,final int y,final BufferedImage[] image,final int mapIndex) 
             {
                 final Runnable r = new Runnable() {
 
@@ -450,10 +436,10 @@ public class NoiseTest
                         }
                     }
                 };
-                threadPool.submit(r);
+                r.run();
             }           
 
-            private void getImage(final CountDownLatch latch,final float x,final float y,final BufferedImage[] image,final int mapIndex) 
+            private void getImage(final CountDownLatch latch,final int x,final int y,final BufferedImage[] image,final int mapIndex) 
             {
                 final Runnable r = new Runnable() {
 
@@ -462,16 +448,9 @@ public class NoiseTest
                     {
                         try 
                         {
-                            long time = -System.currentTimeMillis();
                             float[] noise2d = createNoise2D(x,y,seed);
                             noiseMaps[mapIndex] = noise2d;
-                            time += System.currentTimeMillis();
-//                            System.out.println("Noise generation: "+time+" ms");
-
-                            time = -System.currentTimeMillis();
                             image[0]= TextureUtils.heightMapToImage(noise2d, heightMapSize , gradients[colorGradientIndex] , groundLevel );
-                            time += System.currentTimeMillis();
-//                            System.out.println("Image generation: "+time+" ms");
                         } 
                         finally 
                         {
@@ -479,7 +458,7 @@ public class NoiseTest
                         }
                     }
                 };
-                threadPool.submit( r );
+                r.run();
             }
         };
 
@@ -542,7 +521,7 @@ public class NoiseTest
             @Override
             public void actionPerformed(ActionEvent e)
             {
-                NoiseTest.this.tileSize = Float.parseFloat( tileSize.getText() );
+                NoiseTest.this.tileSize = Integer.parseInt( tileSize.getText() );
                 frame.repaint();
             }
         });
@@ -599,40 +578,47 @@ public class NoiseTest
         cnstrs.fill=GridBagConstraints.NONE;
         panel.add( textfield , cnstrs );        
     }
-
-    private float[] createNoise2D(float x,float y,long seed) 
+    
+    private float[] globalNoiseMap;
+    
+    private float[] getGlobalNoiseMap(long seed) 
     {
-        if ( simplexNoise == null || this.seed != seed ) {
-            simplexNoise = new SimplexNoise(seed);
-        }
-        float[] high = simplexNoise.createHeightMap( x ,y , heightMapSize , tileSize , octaves , persistance );
-        if ( 1 == 2) {
-        	 return high;
-        }
-        final int middleSize= heightMapSize / 16;
-        final float middleScale = (heightMapSize / 16.0f)/heightMapSize;
-        float[] middle = NavMeshGenerator.resample( high , heightMapSize , 16 );
-        
-        final int lowSize = heightMapSize / 2;
-        final float lowScale = (heightMapSize / 2.0f)/heightMapSize;
-        float[] low = NavMeshGenerator.resample( high  , heightMapSize , 2 );
-        
-        float[] result = new float[heightMapSize*heightMapSize];
-        for ( int iy = 0 ; iy < heightMapSize ; iy++) 
+        if ( simplexNoise == null || this.seed != seed ) 
         {
-        	for ( int ix = 0 ; ix < heightMapSize ; ix++) 
-        	{
-        		final int lix = (int) (ix*lowScale);
-        		final int liy = (int) (iy*lowScale);
-        		
-        		final int mix = (int) (ix*middleScale);
-        		final int miy = (int) (iy*middleScale);
-        		
-        		result[ix+iy*heightMapSize] = low[lix+liy*lowSize] * 0.7f + 
-        				                      middle[mix+miy*middleSize] * 0.25f + 
-        				                      high[ix+iy*heightMapSize]*0.05f;
-        	}
+        	this.seed = seed;
+            simplexNoise = new SimplexNoise(seed);
+            System.out.println("Creating new height map");
+            MidpointDisplacement dis = new MidpointDisplacement( heightMapSize , seed );
+            dis.generate( seed );
+            globalNoiseMap=dis.points;
         }
-        return result;
+        return globalNoiseMap;
+    }
+
+    private float[] createNoise2D(int x,int y,long seed) 
+    {
+        float[] high = getGlobalNoiseMap(seed);
+        
+        while ( x < 0 ) {
+        	x += heightMapSize;
+        }
+        
+        while ( y < 0 ) {
+        	y += heightMapSize;
+        }        
+        int x1 = x % heightMapSize; 
+        int y1 = y % heightMapSize;
+        
+        int x2 = (x+1) % heightMapSize;
+        int y2 = (y+1) % heightMapSize;        
+        
+        System.out.println("Generate "+x1+","+y1+" / "+x2+" , "+y2);
+
+        midpointDisplacement.generate( x,y,
+        		2.0f*high[ x1+y1*heightMapSize ] , // top left
+        		2.0f*high[ x2+y1*heightMapSize ] , // top right
+        		2.0f*high[ x1+y2*heightMapSize ], // bottom left
+        		2.0f*high[ x2+y2*heightMapSize ] ); // bottom right
+        return midpointDisplacement.points;
     }
 }
