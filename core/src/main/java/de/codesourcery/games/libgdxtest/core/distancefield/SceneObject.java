@@ -8,6 +8,7 @@ public abstract class SceneObject implements DistanceFunction {
 
 	public final Matrix4 matrix = new Matrix4().idt();
 	public final Vector3 center = new Vector3();
+	protected DistanceFunction distanceFunction;
 	
 	protected SceneObject() {
 	}
@@ -33,8 +34,22 @@ public abstract class SceneObject implements DistanceFunction {
 		float newX = px * l_mat[Matrix4.M00] + py * l_mat[Matrix4.M01] + pz * l_mat[Matrix4.M02] + l_mat[Matrix4.M03];
 		float newY = px * l_mat[Matrix4.M10] + py * l_mat[Matrix4.M11] + pz * l_mat[Matrix4.M12] + l_mat[Matrix4.M13];
 		float newZ = px * l_mat[Matrix4.M20] + py * l_mat[Matrix4.M21] + pz * l_mat[Matrix4.M22] + l_mat[Matrix4.M23];
-		return _distance(newX,newY,newZ);
+		return distanceFunction.distance(newX,newY,newZ);
 	}
 	
-	protected abstract float _distance(float px, float py, float pz);
+	protected final DistanceFunction repetition(final float cx,final float cy,final float cz,final DistanceFunction func) {
+		return new DistanceFunction() {
+			
+			@Override
+			public float distance(float px, float py, float pz) {
+				 px = ( px % cx )+0.5f*cx;
+				 // py = ( py % cy );
+				 pz = ( pz % cz )+0.5f*cz;
+//				px = ( px % cx );
+//				py = ( py % cy );
+//				pz = ( pz % cz );					
+				return func.distance(px,py,pz);
+			}
+		};
+	}
 }

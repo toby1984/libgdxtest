@@ -67,12 +67,14 @@ public final class Scene {
 	
 	public float getClosestHit(float px,float py,float pz,ClosestHit hit) 
 	{
-		SceneObject closestObj = null;
-		float closest = 0;
-		for ( SceneObject obj : objects) 
+		SceneObject closestObj = objects.get(0);
+		float closest = closestObj.distance( px,py,pz);
+		final int len = objects.size();
+		for ( int i = 1 ; i < len ; i++) 
 		{
-			float d = obj.distance( px,py,pz);
-			if ( closestObj == null || d < closest ) {
+			final SceneObject obj=objects.get(i);
+			final float d = obj.distance( px,py,pz);
+			if ( d < closest ) {
 				closest = d;
 				closestObj = obj;
 			}
@@ -82,9 +84,9 @@ public final class Scene {
 		return closest;
 	}
 	
-	private float distance(float px,float py,float pz) 
+	public float distance(float px,float py,float pz) 
 	{
-		float distance = objects.get(0).distance( px,py,pz);
+		float distance = objects.get(0).distance( px,py,pz );
 		final int len = objects.size();
 		for ( int i = 1 ; i < len ; i++) 
 		{
