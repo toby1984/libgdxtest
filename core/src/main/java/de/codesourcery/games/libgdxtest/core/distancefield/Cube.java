@@ -13,7 +13,8 @@ public class Cube extends SceneObject {
 		this.distanceFunction = new DistanceFunction() {
 			
 			@Override
-			public float distance(float px, float py, float pz) {
+			public float distance(float px, float py, float pz) 
+			{
 				float dx = Math.abs( px ) - size;
 				float dy = Math.abs( py ) - size;
 				float dz = Math.abs( pz ) - size;
