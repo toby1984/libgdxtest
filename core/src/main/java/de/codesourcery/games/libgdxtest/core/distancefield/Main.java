@@ -1,249 +1,537 @@
 package de.codesourcery.games.libgdxtest.core.distancefield;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.*;
+import java.text.DecimalFormat;
+import java.util.concurrent.*;
+import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.swing.JFrame;
-import javax.swing.JPanel;
+import javax.swing.*;
 
 import com.badlogic.gdx.graphics.PerspectiveCamera;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 
-public class Main {
+import de.codesourcery.games.libgdxtest.core.distancefield.Scene.ClosestHit;
 
-	static {
+public class Main 
+{
+	protected static final Dimension INITIAL_WINDOW_SIZE = new Dimension(640,480);
+	
+	protected static final float MAX_MARCHING_DISTANCE = 100;
+	protected static final float EPSILON = 0.1f;	
+	
+	protected static final Vector3 TEMP1 = new Vector3();
+	protected static final Vector3 TEMP2 = new Vector3();
+	
+	protected static boolean ENABLE_LIGHTING = true;
+	protected static boolean ENABLE_HARD_SHADOWS = false;
+	
+	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors()*2;	
+	protected static final int SLICE_COUNT = CPU_COUNT;
+	
+	protected static final char KEY_TOGGLE_OCCLUSION = 'o';	
+	protected static final char KEY_TOGGLE_LIGHTING = 'l';	
+	protected static final char KEY_TOGGLE_MOUSELOOK = 27;
+	protected static final char KEY_FORWARD = 'w';
+	protected static final char KEY_BACKWARD = 's';		
+	protected static final char KEY_STRAFE_LEFT = 'a';
+	protected static final char KEY_STRAFE_RIGHT = 'd';
+	protected static final char KEY_UP = 'q';
+	protected static final char KEY_DOWN = 'e';		
+	
+	private static final int AMBIENT_COLOR = Color.GRAY.getRGB();
+	
+	private static final int BACKGROUND_COLOR = Color.BLACK.getRGB();
+	
+	static 
+	{
 		System.loadLibrary("gdx64");
+		System.setProperty("sun.java2d.opengl.fbobject","false");
+		System.setProperty("sun.java2d.opengl","True");				
 	}
+
 	public static void main(String[] args) {
-		
+
 		final JFrame frame = new JFrame("distancefield");
 		frame.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
-		
+
 		frame.getContentPane().setLayout( new GridBagLayout() );
-		
+
 		final GridBagConstraints cnstrs = new GridBagConstraints();
 		cnstrs.weightx=1.0;
 		cnstrs.weighty=1.0;
 		cnstrs.fill = GridBagConstraints.BOTH;
-		final MyPanel panel = new MyPanel();
-		panel.setMinimumSize( new Dimension(640,480) );
-		panel.setPreferredSize( new Dimension(640,480) );
 		
+		final Scene scene= new Scene();
+		
+		scene.add( Scene.pointLight( new Vector3(20,50,10) , Color.WHITE ) );
+		scene.add( Scene.pointLight( new Vector3(20,50,-100) , Color.BLUE ) );		
+		
+		// scene.add( Scene.cube( new Vector3(0,20,-50) , 20 ) );
+		// scene.add( Scene.sphere( new Vector3(0,20,-50) , 20 ) );
+		final SceneObject torus = Scene.torus( new Vector3(0,20,-50) , 1 , 10 ).rotate( new Vector3(1,0,0) , 90 );
+		scene.add( torus );
+		scene.add( Scene.plane( new Vector3(0,10,0) , new Vector3(0,1,0) ) );
+		
+		final MyPanel panel = new MyPanel(scene, new Vector3(0,15,10));
+		panel.setMinimumSize( INITIAL_WINDOW_SIZE );
+		panel.setPreferredSize( INITIAL_WINDOW_SIZE );
+
 		frame.getContentPane().add( panel , cnstrs );
-		
+
 		frame.pack();
 		frame.setVisible( true );
+		panel.requestFocus();
+		
+		final Thread animator = new Thread() 
+		{
+			private float angle = 0;
+			
+			@Override
+			public void run() 
+			{
+				final Runnable r = new Runnable() {
+
+					@Override
+					public void run() {
+						panel.repaint();
+					}
+				};
+				
+				while(true) 
+				{
+					try 
+					{
+						scene.lock();
+						
+						final Matrix4 m = new Matrix4();
+						
+						m.rotate( new Vector3(1,0,0) , 90 );
+						m.rotate( new Vector3(0,1,0) , angle );
+						m.translate( -torus.center.x , -torus.center.y , -torus.center.z ); 
+						torus.matrix.set( m );
+						
+						angle += 0.5f;
+						if ( angle >= 360 ) {
+							angle -= 360;
+						}
+					} finally {
+						scene.unlock();
+					}
+					
+					try 
+					{
+						SwingUtilities.invokeAndWait( r );
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		};
+		animator.setName("animation-thread");
+		animator.setDaemon(true);
+		animator.start();
 	}
-	
+
 	protected static class MyPanel extends JPanel 
 	{
-		private final float maxSteps = 50;
-		
-		private final float epsilon = 0.3f;
-		
-		private final float xMin = -10;
-		private final float xMax = 10;
-		
-		private final float yMin = -10;
-		private final float yMax = 10;
-		
-		private final float xStep = (xMax - xMin ) / 800;
-		private final float yStep = (yMax - yMin ) / 600;
-		
-		private final Vector3 lightPos = new Vector3(20,50,-50);	
-		
 		private final PerspectiveCamera cam;
+
+		private final ThreadPoolExecutor threadPool;
 		
-		public MyPanel() {
-			cam = new PerspectiveCamera(67,640,480);
-			cam.position.set( new Vector3(0,0,30) );
+		private int[] imageData;
+		
+		private final Scene scene;
+		
+		private final Cursor blankCursor; 
+		private boolean mouseLook = false;
+		
+		private final Object FPS_COUNTER_LOCK = new Object();
+		
+		// @GuardedBy(FPS_COUNTER_LOCK)
+		private long frameCounter;
+		
+		// @GuardedBy(FPS_COUNTER_LOCK)
+		private long totalFrameTime = 0;
+
+		private final KeyAdapter adapter = new KeyAdapter() 
+		{
+			private final Vector3 tmp = new Vector3();
+
+			public void keyTyped(java.awt.event.KeyEvent e) 
+			{
+				if ( e.getKeyChar() == KEY_TOGGLE_MOUSELOOK ) 
+				{
+					if ( mouseLook ) {
+						mouseLook = false;
+						setCursor( Cursor.getDefaultCursor() );
+					}
+					return;
+				}
+				
+				float deltaTime = 1.0f;
+ 				float velocity = 1f;
+				switch( e.getKeyChar() ) 
+				{
+				case KEY_TOGGLE_LIGHTING:
+					ENABLE_LIGHTING = ! ENABLE_LIGHTING;
+					resetFpsCounter();
+					break;
+				case KEY_TOGGLE_OCCLUSION:
+					if ( ENABLE_LIGHTING ) {
+						ENABLE_HARD_SHADOWS = ! ENABLE_HARD_SHADOWS;
+					}
+					resetFpsCounter();
+					break;
+				case KEY_FORWARD:
+					tmp.set(cam.direction).scl(deltaTime * velocity);
+					cam.position.add(tmp);
+					break;
+				case KEY_BACKWARD:
+					tmp.set(cam.direction).scl(-deltaTime * velocity);
+					cam.position.add(tmp);
+					break;
+				case KEY_STRAFE_LEFT:
+					tmp.set(cam.direction).crs(cam.up).nor().scl(-deltaTime * velocity);
+					cam.position.add(tmp);
+					break;
+				case KEY_STRAFE_RIGHT:
+					tmp.set(cam.direction).crs(cam.up).nor().scl(deltaTime * velocity);
+					cam.position.add(tmp);
+					break;
+				case KEY_UP:
+					tmp.set(cam.up).nor().scl(deltaTime * velocity);
+					cam.position.add(tmp);
+					break;
+				case KEY_DOWN:
+					tmp.set(cam.up).nor().scl(-deltaTime * velocity);
+					cam.position.add(tmp);
+					break;
+				}
+				cam.update();
+				MyPanel.this.repaint();
+			}
+		};
+
+		private final MouseAdapter mouseAdapter = new MouseAdapter() {
+
+			private final float degreesPerPixel = 0.1f;
+			private int lastX = 0;
+			private int lastY = 0;
+
+			{
+				if ( mouseLook ) {
+					updateLastCoordinates();
+				}
+			}
+			
+			private void updateLastCoordinates() {
+				final Point point = MouseInfo.getPointerInfo().getLocation();
+				lastX = point.x;
+				lastY = point.y;		
+			}
+			
+			public void mousePressed(MouseEvent e) {
+				if ( ! mouseLook ) {
+					mouseLook = true;
+					setCursor( blankCursor );
+					updateLastCoordinates();
+				}
+			}
+			
+			public void mouseMoved(MouseEvent e) 
+			{
+				if ( ! mouseLook ) {
+					return;
+				}
+				
+				final Point point = MouseInfo.getPointerInfo().getLocation();				
+
+				int dx = point.x - lastX;
+				int dy = point.y- lastY;
+
+				lastX = point.x;
+				lastY = point.y;
+				
+				float deltaX = - dx  * degreesPerPixel;
+				float deltaY = - dy * degreesPerPixel;
+				cam.direction.rotate(cam.up, deltaX);
+				TEMP2.set(cam.direction).crs(cam.up).nor();
+				cam.direction.rotate(TEMP2, deltaY);
+				cam.update();
+				MyPanel.this.repaint();
+			}
+		};
+
+		public MyPanel(Scene scene,Vector3 eyePosition) 
+		{
+			if (scene == null) {
+				throw new IllegalArgumentException("scene must not be NULL");
+			}
+			this.scene = scene;
+			
+			cam = new PerspectiveCamera(60,INITIAL_WINDOW_SIZE.width,INITIAL_WINDOW_SIZE.height);
+			cam.far = 1024;
+			cam.position.set( eyePosition );
 			cam.direction.set( 0 , 0 , -1 );
 			cam.update();
+			addKeyListener( adapter );
+			addMouseListener( mouseAdapter );
+			addMouseMotionListener( mouseAdapter );
+			setFocusable( true );
+			
+			final BufferedImage cursorImage= new BufferedImage(16,16,BufferedImage.TYPE_INT_ARGB); 
+			blankCursor = Toolkit.getDefaultToolkit().createCustomCursor( cursorImage ,  new Point(0,0), "blank" );
+			
+			if ( mouseLook ) {
+				setCursor( blankCursor );
+			}
+
+			BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(50);
+			final ThreadFactory threadFactory = new ThreadFactory() {
+
+				private final AtomicInteger threadCount = new AtomicInteger(0);
+				@Override
+				public Thread newThread(Runnable r) 
+				{
+					final Thread t = new Thread(r);
+					t.setName("rendering-thread-"+threadCount.incrementAndGet());
+					t.setDaemon(true);
+					return t;
+				}
+			};
+			threadPool = new ThreadPoolExecutor( CPU_COUNT , CPU_COUNT , 60 , TimeUnit.MINUTES, queue , threadFactory , new CallerRunsPolicy() );
+		}
+
+		public void resetFpsCounter() 
+		{
+			synchronized(FPS_COUNTER_LOCK) {
+				this.frameCounter = 0;
+				this.totalFrameTime = 0;
+			}
 		}
 		
 		@Override
 		protected void paintComponent(Graphics g) 
 		{
-			super.paintComponent(g);
-			
-			int w = getWidth();
-			int h = getHeight();
-			
-			Vector3 r = new Vector3(cam.direction);
-			Vector3 s = new Vector3();
-			Vector3 t = new Vector3();
-			fromZAxis( s , t , r );
-			
-			for ( float y = yMin ; y <= yMax ; y += yStep ) 
+			long time = - System.currentTimeMillis();
+
+			try 
 			{
-				final Vector3 yComp = new Vector3( s ).scl( y );
-				for ( float x = xMin ; x <= xMax ; x += xStep ) 
-				{
-					Vector3 xComp = new Vector3( t ).scl( x );
-					Vector3 pointOnViewPlane= new Vector3( xComp ).add( yComp ).add( cam.position ).add( cam.direction );
-					Vector3 rayDir = pointOnViewPlane.sub( cam.position ).nor();
-					int step = 1;
-					Vector3 p = new Vector3( cam.position );
-					for ( ; step < maxSteps ; step++ ) 
-					{
-						float distance = distance( p );
-						if ( distance <= epsilon ) {
-							break;
-						} 
-						p.x = p.x + rayDir.x*distance;
-						p.y = p.y + rayDir.y*distance;
-						p.z = p.z + rayDir.z*distance;
-					}
-					
-					final Color color;
-					if ( step < maxSteps ) 
-					{
-						Vector3 lightVec = new Vector3(lightPos).sub( p ).nor();
-						float dot = normal( p ).dot( lightVec );
-						if ( dot > 0) {
-							double angle = Math.acos( dot )*(180d/Math.PI);
-							float lightFactor =(float) ( (90.0-angle)/90.0);
-							color = new Color( 0,0,lightFactor);
-						} else {
-							color = Color.BLACK;
-						}
-						// System.out.println( step );
-					} else {
-						color = Color.BLACK;
-					}
-					
-					// transform point using camera matrix
-					System.out.print( p +" => ");
-					p.mul( cam.combined );
-					System.out.println( p );
-					// scale to screen coordinates
-					int scrX = Math.round( w*p.x);
-					int scrY = Math.round( h*p.y);
-					
-					g.setColor(color);
-					g.drawRect( scrX , scrY , 1 , 1 );
-				}
+				scene.lock();
+				final Image image = renderToImage( 640 , 480 );
+				g.drawImage( image , 0 , 0, getWidth() , getHeight() , null );
 			}
-		}
-		
-		private Vector3 normal(Vector3 p) 
-		{
-			float d0 = distance(p);
-			float dx = 0.01f;
-			
-			Vector3 p1 = new Vector3(p);
-			p1.x+=dx;
-			float deltaX = d0-distance( p1 );
-			
-			Vector3 p2 = new Vector3(p);
-			p2.y+=dx;
-			float deltaY = d0-distance( p2 );
-			
-			Vector3 p3 = new Vector3(p);
-			p3.z+=dx;
-			float deltaZ = d0 - distance( p3 );
-			return new Vector3(-deltaX,-deltaY,-deltaZ).nor();
-		}
-		
-		private float distance(Vector3 p) 
-		{
-			float result = distanceToSphere( p , new Vector3(-2,0,-50) , 10 );
-			
-			float[] d = { distanceToSphere( p , new Vector3(15,0,-60)   , 10 ),
-						  distanceToSphere( p , new Vector3(0,15,-50)   , 10 ),
-						  distanceToSphere( p , new Vector3(-15,15,-50) , 10),
-						  distanceToSphere( p , new Vector3(-15,0,-50) , 10),
-						  distanceToSphere( p , new Vector3(0,-10,-20) , 5)
-			};
-			for ( float val : d ) {
-				if ( val < result ) {
-					result = val;
-				}
+			finally {
+				scene.unlock();
 			}
-			return result;
+
+			time += System.currentTimeMillis();
+
+			g.setColor(Color.RED);
+			
+			float fps;
+			float avgFps;
+			synchronized(FPS_COUNTER_LOCK) 
+			{
+				totalFrameTime += time;
+				frameCounter++;
+				fps = 1000f/time;
+				avgFps = 1000f/ ( totalFrameTime / frameCounter );
+			}
+			final DecimalFormat format = new DecimalFormat("###0.0#");
+			g.drawString( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms)" , 10 , 10 );
+			g.drawString( "Eye position  : "+toString(cam.position) , 10, 25 );
+			g.drawString( "View direction: "+toString(cam.direction), 10, 40 );					
 		}
 
-		protected float distanceToSphere(Vector3 p,Vector3 sphereCenter,float radius) 
+		private Image renderToImage(final int width,final int height) 
 		{
-			Vector3 temp = new Vector3( sphereCenter );
-			float dist = temp.sub( p ).len();
-			return dist - radius;
+			if ( imageData == null || imageData.length != (width*height) ) {
+				imageData = new int[ width*height ];
+			} 
+
+			final CountDownLatch latch = new CountDownLatch( SLICE_COUNT );
+			int xStep = width / SLICE_COUNT;
+			for ( int x = 0 ; x < width ; x+=xStep) 
+			{
+				final int x1 = x;
+				final int x2 =  (x1+xStep) >= width ? width :  x1 + xStep;
+				
+				threadPool.execute( new Runnable() {
+					@Override
+					public void run() 
+					{
+						try {
+							renderImageRegion( x1 , 0 , x2, height , imageData , width , height );
+						} finally {
+							latch.countDown();
+						}
+					}
+				});
+			}
+
+			try 
+			{
+				latch.await();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+
+			final DirectColorModel colorModel =new DirectColorModel(32,0x00FF0000,0x000FF00,0x000000FF,0);
+			final MemoryImageSource mis = new MemoryImageSource(width, height, colorModel, imageData , 0, width);		
+			return createImage( mis );
+		}
+
+		private void renderImageRegion(int xStart,int yStart,int xEnd,int yEnd,int[] imageData,int imageWidth,int imageHeight) 
+		{
+			final int w = imageWidth;
+			final int h = imageHeight;
+
+			final Vector3 currentPoint = new Vector3();
+			final Vector3 rayDir = new Vector3();
+			final Vector3 lightVec = new Vector3();
+			final Vector3 normal = new Vector3();
+			final ClosestHit hit = new ClosestHit();
+
+			for ( int y = yStart ; y < yEnd ; y++ ) 
+			{
+				for ( int x = xStart ; x < xEnd ; x++ )
+				{
+					currentPoint.set(x,y,0);
+					unproject(currentPoint,w,h);
+					rayDir.set(currentPoint).sub(cam.position);
+
+					final int color = traceViewRay(currentPoint,rayDir,hit,lightVec , normal );
+					imageData[ x + y * imageWidth ] = color;					
+				}
+			}
 		}
 		
-		protected float distanceToCube(Vector3 point,float sx) 
+		private int traceViewRay(Vector3 pointOnRay,Vector3 rayDir,ClosestHit hit,Vector3 lightVec,Vector3 normal) 
 		{
-			Vector3 p = new Vector3(0,0,50);
-			final float sy = sx;
-			final float sz = sx;
+			float marched = 0;
+			while ( marched < MAX_MARCHING_DISTANCE )
+			{
+				float distance = scene.getClosestHit( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
+				if ( distance <= EPSILON ) {
+					break;
+				} 
+				marched += distance;
+				
+				pointOnRay.x += rayDir.x*distance;
+				pointOnRay.y += rayDir.y*distance;
+				pointOnRay.z += rayDir.z*distance;
+			}
+
+			if ( marched < MAX_MARCHING_DISTANCE ) 
+			{
+				int color = 0;
+				if ( ! ENABLE_LIGHTING ) 
+				{
+					return AMBIENT_COLOR;	
+				}
+				scene.populateNormal( pointOnRay , normal ); // calculate normal
+				
+				for ( int i = 0 ; i < scene.lights.size() ; i++ ) 
+				{
+					PointLight light = scene.lights.get(i);
+					lightVec.set( light.position ).sub( pointOnRay ).nor();
+					float dot = Math.max( 0 ,  normal.dot( lightVec ) );
+					int colorToAdd = 0;
+					if ( dot > 0 ) 
+					{
+						if ( ! ENABLE_HARD_SHADOWS || ! isOccluded( pointOnRay , light.position , hit ) ) {
+							colorToAdd = multColor(light.color,dot);
+						} else {
+							colorToAdd = multColor(light.color,0.2f);
+						}
+					}
+					color = addColors( color , colorToAdd );					
+				}
+				return color;
+			}
+			return BACKGROUND_COLOR;
+		}
+		
+		private int addColors(int color1,int color2) {
 			
-			p.sub( point );
-			return Math.max( Math.max(Math.abs(p.x)-sx, Math.abs(p.y)-sy), Math.abs(p.z)-sz);
+			int r = (color1>>16 & 0xff) + (color2>>16 & 0xff);
+			int g = (color1>>8 & 0xff) + (color2>>8 & 0xff);
+			int b = (color1 & 0xff) + (color2 & 0xff);
+			
+			if (r > 255 ) {
+				r = 255;
+			}			
+			if (g > 255 ) {
+				g = 255;
+			}		
+			if (b > 255 ) {
+				b = 255;
+			}				
+			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;
 		}
 		
-		protected float union(float d1,float d2) {
-			return Math.min(d1,d2);
+		private int multColor(int color,float factor) 
+		{
+			float r = (color>>16 & 0xff)*factor;
+			if (r > 255 ) {
+				r = 255;
+			}
+			float g = (color>>8 & 0xff)*factor;
+			if (g > 255 ) {
+				g = 255;
+			}						
+			float b = (color& 0xff)*factor;
+			if (b > 255 ) {
+				b = 255;
+			}						
+			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;			
 		}
 		
-		protected float intersection(float d1,float d2) {
-			return Math.max(d1,d2);
-		}	
+		private boolean isOccluded(Vector3 pointOnSurface,Vector3 lightPos,ClosestHit hit) 
+		{
+			final Vector3 rayDir = new Vector3(lightPos).sub( pointOnSurface ).nor();
+			
+			// adjust starting point slightly towards the light source so we're clear of 
+			// the surface we just intersected
+			final Vector3 currentPoint = new Vector3(rayDir).scl(10f).add( pointOnSurface );
+			
+			float distanceToLight = new Vector3( lightPos ).sub( currentPoint ).len();
+			float marched = 0;
+			while ( marched < distanceToLight )
+			{
+				float distance = scene.getClosestHit( currentPoint.x , currentPoint.y, currentPoint.z , hit );
+				if ( distance <= EPSILON ) {
+					return true;
+				} 
+				distance *= 0.99f;
+				marched += distance;
+				
+				currentPoint.x += rayDir.x*distance;
+				currentPoint.y += rayDir.y*distance;
+				currentPoint.z += rayDir.z*distance;
+			}
+			return false;
+		}
 		
-		protected float subtraction(float d1,float d2) {
-			return Math.max(d1,-d2);
+		
+		private String toString(Vector3 v) {
+			return "( "+v.x+" | "+v.y+" | "+v.z+" )";
+		}
+
+		private void unproject (Vector3 vec, float viewportWidth, float viewportHeight) {
+			float x = vec.x;
+			float y = vec.y;
+			y = viewportHeight - y - 1;
+			vec.x = (2 * x) / viewportWidth - 1;
+			vec.y = (2 * y) / viewportHeight - 1;
+			vec.z = 2 * vec.z - 1;
+			vec.prj(cam.invProjectionView);
 		}		
 	}
-	
-    public static void fromZAxis(Vector3 xAxis,Vector3 yAxis,Vector3 zAxis)
-    {
-            /*
-         - Set the smallest (in absolute value) component of R to zero.
-         
-         - Exchange the other two components of R, and then negate the first one.
-            S = ( 0, -Rz, Ry ), in case Rx is smallest.
-            
-         - Normalize vector S.
-            S = S / |S|
-         - Last vector T is a cross product of R and S then.
-            T = R x S
-            */
-
-            float x = zAxis.x;
-            float y = zAxis.y;
-            float z = zAxis.z;
-
-            final Vector3 r;
-            final float temp;
-            if ( x <= y && x <= z ) // ( Rx* , Ry , Rz ) 
-            {
-                    x = 0;
-                    r = new Vector3(x,y,z);
-                    temp = y;
-                    y = -z;
-                    z= temp;
-            } else if ( y <= x && y <= z ) { // ( Rx , Ry* , Rz )
-                    y = 0;
-                    r = new Vector3(x,y,z);
-                    temp = x;
-                    x = -z;
-                    z = temp;
-            } else { // ( Rx , Ry , Rz* )
-                    z = 0;
-                    r = new Vector3(x,y,z);
-                    temp=x;
-                    x = -y;
-                    y=temp;
-            }
-
-            yAxis.x = x;
-            yAxis.y = y;
-            yAxis.z = z;
-
-            yAxis.nor();
-            xAxis.set( r.crs( yAxis ) );
-            
-            // yAxis.scl(-1);
-    }
 }
