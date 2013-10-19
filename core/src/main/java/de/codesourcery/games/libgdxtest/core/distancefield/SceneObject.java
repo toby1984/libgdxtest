@@ -10,7 +10,13 @@ public abstract class SceneObject implements DistanceFunction {
 	public final Vector3 center = new Vector3();
 	protected DistanceFunction distanceFunction;
 	
+	public boolean smoothBlend;
+	
 	protected SceneObject() {
+	}
+	
+	public final void setSmoothBlend(boolean smoothBlend) {
+		this.smoothBlend = smoothBlend;
 	}
 	
 	protected SceneObject(Vector3 center) {

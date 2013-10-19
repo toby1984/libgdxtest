@@ -14,7 +14,7 @@ public final class Scene {
 
 	private final ReentrantLock LOCK = new ReentrantLock();
 	
-	private final List<SceneObject> objects = new ArrayList<>();
+	public final List<SceneObject> objects = new ArrayList<>();
 	public final List<PointLight> lights = new ArrayList<>();
 	
 	private static final float fieldExtend = 20f;
@@ -30,7 +30,7 @@ public final class Scene {
 	private final float xStart;
 	private final float yStart;
 	private final float zStart;
-	private final float step;
+	public final float step;
 	
 	private final float halfStep;
 	
@@ -207,24 +207,6 @@ public final class Scene {
 		this.lights.add(obj);
 	}
 	
-//	public float getClosestHit(float px,float py,float pz,ClosestHit hit) 
-//	{
-//		SceneObject closestObj = objects.get(0);
-//		float closest = closestObj.distance( px,py,pz);
-//		final int len = objects.size();
-//		for ( int i = 1 ; i < len ; i++) 
-//		{
-//			final SceneObject obj=objects.get(i);
-//			final float d = obj.distance( px,py,pz);
-//			if ( d < closest ) {
-//				closest = d;
-//				closestObj = obj;
-//			}
-//		}
-//		hit.distance = closest;
-//		hit.object = closestObj;
-//		return closest;
-//	}
 	public float distance(float px,float py,float pz) 
 	{
 		if ( precompute ) 
@@ -254,24 +236,30 @@ public final class Scene {
 					float factor = len2/cellDist;
 					
 					float nv = fieldData[ ix+inx + (iy+iny)*fieldElements + (iz+inz) *fieldElements*fieldElements ];
-					return lerp(result, nv , factor );
+					result = lerp(result, nv , factor );
 				}
 				// blockX+BLOCKS_X*blockY+(BLOCKS_X*BLOCKS_Y)*blockZ
 				return result;
 			} 
-			return fieldExtend*0.9f;
 		}
-		float distance = objects.get(0).distance( px,py,pz );
-		final int len = objects.size();
-		for ( int i = 1 ; i < len ; i++) 
-		{
-			final SceneObject obj=objects.get(i);
-			final float d = obj.distance( px,py,pz);
-			if ( d < distance ) {
-				distance = d;
-			}
+		return distanceUncached(px, py, pz);
+	}
+	
+	private float smoothMin( float a, float b)
+	{
+		final float k = 0.9f;
+	    float h = clamp( 0.5f+0.5f*(b-a)/k, 0.0f, 1.0f );
+	    return lerp( b, a, h ) - k*h*(1.0f-h);
+	}	
+	
+	private float clamp(float a,float min,float max) {
+		if ( a < min ) {
+			return min;
 		}
-		return distance;
+		if ( a > max ) {
+			return max;
+		}
+		return a;
 	}
 	
 	private float lerp(float a, float b, float w)
@@ -287,7 +275,9 @@ public final class Scene {
 		{
 			final SceneObject obj=objects.get(i);
 			final float d = obj.distance( px,py,pz);
-			if ( d < distance ) {
+			if ( obj.smoothBlend ) {
+				distance = smoothMin( distance , d );
+			} else if ( d < distance ) {
 				distance = d;
 			}
 		}

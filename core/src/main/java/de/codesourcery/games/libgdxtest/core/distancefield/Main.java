@@ -4,17 +4,21 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Image;
 import java.awt.MouseInfo;
 import java.awt.Point;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.awt.image.ConvolveOp;
 import java.awt.image.DirectColorModel;
+import java.awt.image.Kernel;
 import java.awt.image.MemoryImageSource;
 import java.text.DecimalFormat;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -39,7 +43,7 @@ public class Main
 	protected static final Dimension INITIAL_WINDOW_SIZE = new Dimension(640,480);
 
 	protected static final float MAX_MARCHING_DISTANCE = 100;
-	protected static final float EPSILON = 0.2f;	
+	protected static final float EPSILON = 0.1f;	
 
 	protected static final Vector3 TEMP1 = new Vector3();
 	protected static final Vector3 TEMP2 = new Vector3();
@@ -47,15 +51,16 @@ public class Main
 	protected static final boolean PRINT_TIMINGS = false;
 
 	protected static boolean ENABLE_LIGHTING = true;
-	protected static boolean ENABLE_HARD_SHADOWS = true;
+	protected static boolean ENABLE_SHADOWS = true;
 	protected static boolean RENDER_TO_SCREEN = true;
 	
-	protected static boolean PRECOMPUTE = true;
+	protected static boolean PRECOMPUTE = false;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();	
 	protected static final int SLICE_COUNT = CPU_COUNT+1;
 
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
+	protected static final char KEY_SMOOTH_BLEND = 'b';
 	protected static final char KEY_TOGGLE_LERP = 'x';			
 	protected static final char KEY_TOGGLE_OCCLUSION = 'o';	
 	protected static final char KEY_TOGGLE_LIGHTING = 'l';	
@@ -92,16 +97,20 @@ public class Main
 
 		final Scene scene= new Scene( PRECOMPUTE );
 
-		scene.add( Scene.pointLight( new Vector3(-70,70,-50) , Color.BLUE ) );
-		scene.add( Scene.pointLight( new Vector3(70,70,-50) , Color.RED ) );		
+		scene.add( Scene.pointLight( new Vector3(-70,70,50) , new Color( 210 , 0 ,0 ) ) );
+		scene.add( Scene.pointLight( new Vector3(70,70,-50) , new Color( 210 , 0 ,0 ) ) );		
 
 		final float radius = 1.5f;
-		final SceneObject cube = Scene.cube( new Vector3(0,22,-50) , radius );
+		final SceneObject cube = Scene.cube( new Vector3(2.5f,22,-50) , radius );
 		scene.add( cube );
 		// scene.add( Scene.sphere( new Vector3(0,20,-50) , 20 ) );
-		final SceneObject torus = Scene.torus( new Vector3(0,22,-50) , radius*0.25f , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
-		scene.add( torus );
-		scene.add( Scene.plane( new Vector3(0,torus.center.y - radius ,0) , new Vector3(0,1,0) ) );
+		final SceneObject torus1 = Scene.torus( new Vector3(0,22,-50) , radius*0.25f , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+		scene.add( torus1 );
+		
+		final SceneObject torus2 = Scene.torus( new Vector3(-2.5f,22,-50) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+		scene.add( torus2 );
+		
+		// scene.add( Scene.plane( new Vector3(0,torus1.center.y - radius ,0) , new Vector3(0,1,0) ) );
 
 		final MyPanel panel = new MyPanel(scene, new Vector3(0,26,-33) , new Vector3(0.02f,-0.294f,-0.9555f) );
 		panel.setMinimumSize( INITIAL_WINDOW_SIZE );
@@ -116,7 +125,8 @@ public class Main
 		final Thread animator = new Thread() 
 		{
 			private float angle1 = 0;
-			private float angle2 = 0;			
+			private float angle2 = 0;
+			private float angle3 = 0;			
 
 			@Override
 			public void run() 
@@ -137,10 +147,13 @@ public class Main
 
 						final Matrix4 m = new Matrix4();
 						m.rotate( new Vector3(1,0,0) , 90 );
-						angle1 = animate(torus,angle1,3,m);
+						angle1 = rotY(torus1,angle1,3,m);
 
 						m.idt();
-						angle2 = animate(cube,angle2,-3,m);
+						angle3 = rotZ(torus2,angle3,-1.5f,m);
+						
+						m.idt();
+						angle2 = rotY(cube,angle2,-3,m);
 
 					} finally {
 						scene.sceneChanged();
@@ -156,11 +169,14 @@ public class Main
 				}
 			}
 
-			private float animate(SceneObject obj,float angle,float angleInc,Matrix4 m) {
+			private float rotY(SceneObject obj,float angle,float angleInc,Matrix4 m) {
 				m.rotate( new Vector3(0,1,0) , angle );
 				m.translate( -obj.center.x , -obj.center.y , -obj.center.z ); 
 				obj.matrix.set( m );
-
+				return incAngle( angle , angleInc );
+			}
+			
+			private float incAngle(float angle,float angleInc) {
 				angle += angleInc;
 				if ( angle >= 360 ) {
 					angle -= 360;
@@ -169,6 +185,13 @@ public class Main
 				}
 				return angle;
 			}
+			
+			private float rotZ(SceneObject obj,float angle,float angleInc,Matrix4 m) {
+				m.rotate( new Vector3(0,0,-1) , angle );
+				m.translate( -obj.center.x , -obj.center.y , -obj.center.z ); 
+				obj.matrix.set( m );
+				return incAngle( angle , angleInc );
+			}			
 		};
 		animator.setName("animation-thread");
 		animator.setDaemon(true);
@@ -215,21 +238,32 @@ public class Main
 				float velocity = 1f;
 				switch( e.getKeyChar() ) 
 				{
+					case KEY_SMOOTH_BLEND:
+						for ( SceneObject obj : scene.objects ) {
+							obj.setSmoothBlend( ! obj.smoothBlend );
+							System.out.println("smooth blend: "+obj.smoothBlend);
+						}
+						resetFpsCounter();
+						break;
 					case KEY_TOGGLE_LERP:
 						scene.setLerp( ! scene.isLerp() );
+						System.out.println("linear interpolation: "+scene.isLerp());
 						resetFpsCounter();
 						break;
 					case KEY_TOGGLE_RENDERING:
 						RENDER_TO_SCREEN = ! RENDER_TO_SCREEN;
+						System.out.println("render to screen: "+RENDER_TO_SCREEN );
 						resetFpsCounter();
 						break;
 					case KEY_TOGGLE_LIGHTING:
 						ENABLE_LIGHTING = ! ENABLE_LIGHTING;
+						System.out.println("lighting: "+ENABLE_LIGHTING);
 						resetFpsCounter();
 						break;
 					case KEY_TOGGLE_OCCLUSION:
 						if ( ENABLE_LIGHTING ) {
-							ENABLE_HARD_SHADOWS = ! ENABLE_HARD_SHADOWS;
+							ENABLE_SHADOWS = ! ENABLE_SHADOWS;
+							System.out.println("shadows: "+ENABLE_SHADOWS);
 						}
 						resetFpsCounter();
 						break;
@@ -361,11 +395,28 @@ public class Main
 			}
 		}
 
+		public Image blur(Image image)
+		{
+			final BufferedImage biSrc = new BufferedImage(image.getWidth(null),image.getHeight(null) , BufferedImage.TYPE_INT_RGB); 
+			Graphics2D graphics = biSrc.createGraphics();
+			graphics.drawImage( image , 0 , 0 , null );
+			
+		    float data[] = { 0.0625f, 0.125f, 0.0625f, 0.125f, 0.25f, 0.125f,
+		        0.0625f, 0.125f, 0.0625f };
+		    Kernel kernel = new Kernel(3, 3, data);
+		    ConvolveOp convolve = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP,
+		        null);
+		    BufferedImage biDest = new BufferedImage( biSrc.getWidth() , biSrc.getHeight() , biSrc.getType() );
+		    convolve.filter(biSrc, biDest);
+		    return biDest;
+		  }
+		
 		@Override
 		protected void paintComponent(Graphics g) 
 		{
 			long time = - System.currentTimeMillis();
 
+			Graphics2D graphics = (Graphics2D) g;
 			try 
 			{
 				scene.lock();
@@ -379,11 +430,15 @@ public class Main
 				}
 				
 				long time3 = -System.currentTimeMillis();
-				final Image image = renderToImage( 640 , 480 );
+				final Image image = renderToImage( 512 , 512 );
 				time3 += System.currentTimeMillis();
 				if ( PRINT_TIMINGS ) System.out.println("Actual calculation: "+time3+" ms");
-				if ( RENDER_TO_SCREEN ) {
-					g.drawImage( image , 0 , 0, getWidth() , getHeight() , null );
+				if ( RENDER_TO_SCREEN ) 
+				{
+					graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+					graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
+					graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);					
+					graphics.drawImage( image , 0 , 0, getWidth() , getHeight() , null );
 				}
 			}
 			finally {
@@ -517,7 +572,7 @@ public class Main
 					int colorToAdd = 0;
 					if ( dot > 0 ) 
 					{
-						if ( ! ENABLE_HARD_SHADOWS || ! isOccluded( pointOnRay , light.position ) ) {
+						if ( ! ENABLE_SHADOWS || ! isOccluded( pointOnRay , light.position ) ) {
 							colorToAdd = multColor(light.color,dot);
 						} else {
 							colorToAdd = multColor(light.color,0.2f);
@@ -581,7 +636,6 @@ public class Main
 				if ( distance <= EPSILON ) {
 					return true;
 				} 
-				// distance *= 0.90f;
 				marched += distance;
 
 				currentPoint.x += rayDir.x*distance;
