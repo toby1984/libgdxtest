@@ -10,6 +10,8 @@ public abstract class SceneObject implements DistanceFunction {
 	public final Vector3 center = new Vector3();
 	protected DistanceFunction distanceFunction;
 	
+	protected int color;
+	
 	public boolean smoothBlend;
 	
 	protected SceneObject() {
@@ -17,6 +19,11 @@ public abstract class SceneObject implements DistanceFunction {
 	
 	public final void setSmoothBlend(boolean smoothBlend) {
 		this.smoothBlend = smoothBlend;
+	}
+	
+	public final SceneObject setColor(int color) {
+		this.color = color;
+		return this;
 	}
 	
 	protected SceneObject(Vector3 center) {
@@ -57,5 +64,9 @@ public abstract class SceneObject implements DistanceFunction {
 				return func.distance(px,py,pz);
 			}
 		};
+	}
+	
+	public int getColor(float px,float py,float pz) {
+		return color;
 	}
 }

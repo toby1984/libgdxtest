@@ -10,16 +10,13 @@ import java.awt.GridBagLayout;
 import java.awt.Image;
 import java.awt.MouseInfo;
 import java.awt.Point;
-import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.ConvolveOp;
-import java.awt.image.DirectColorModel;
 import java.awt.image.Kernel;
-import java.awt.image.MemoryImageSource;
 import java.text.DecimalFormat;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -38,6 +35,8 @@ import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 
+import de.codesourcery.games.libgdxtest.core.distancefield.Scene.ClosestHit;
+
 public class Main 
 {
 	protected static final Dimension INITIAL_WINDOW_SIZE = new Dimension(640,480);
@@ -54,13 +53,14 @@ public class Main
 	protected static boolean ENABLE_SHADOWS = true;
 	protected static boolean RENDER_TO_SCREEN = true;
 	
-	protected static boolean PRECOMPUTE = false;
+	protected static boolean PRECOMPUTE = true;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();	
 	protected static final int SLICE_COUNT = CPU_COUNT+1;
 
+	protected static final char KEY_PRING_CAMERA = 'p';	
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
-	protected static final char KEY_SMOOTH_BLEND = 'b';
+	protected static final char KEY_TOGGLE_SMOOTH_BLEND = 'b';
 	protected static final char KEY_TOGGLE_LERP = 'x';			
 	protected static final char KEY_TOGGLE_OCCLUSION = 'o';	
 	protected static final char KEY_TOGGLE_LIGHTING = 'l';	
@@ -79,8 +79,8 @@ public class Main
 	static 
 	{
 		System.loadLibrary("gdx64");
-		// System.setProperty("sun.java2d.opengl.fbobject","false");
-		// System.setProperty("sun.java2d.opengl","True");				
+		System.setProperty("sun.java2d.opengl.fbobject","false");
+		System.setProperty("sun.java2d.opengl","True");				
 	}
 
 	public static void main(String[] args) {
@@ -97,22 +97,25 @@ public class Main
 
 		final Scene scene= new Scene( PRECOMPUTE );
 
-		scene.add( Scene.pointLight( new Vector3(-70,70,50) , new Color( 210 , 0 ,0 ) ) );
+		scene.add( Scene.pointLight( new Vector3(-70,70,50) , new Color( 255 , 255 ,255 ) ) );
 		scene.add( Scene.pointLight( new Vector3(70,70,-50) , new Color( 210 , 0 ,0 ) ) );		
 
 		final float radius = 1.5f;
 		final SceneObject cube = Scene.cube( new Vector3(2.5f,22,-50) , radius );
+		cube.setColor( 0x000000ff );
 		scene.add( cube );
 		// scene.add( Scene.sphere( new Vector3(0,20,-50) , 20 ) );
-		final SceneObject torus1 = Scene.torus( new Vector3(0,22,-50) , radius*0.25f , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+		final SceneObject torus1 = Scene.torus( new Vector3(0,22,-50) , radius*0.25f , radius*2*2 ).rotate( new Vector3(1,0,0) , 90 );
+		torus1.setColor( 0x00ff0000 );
 		scene.add( torus1 );
 		
 		final SceneObject torus2 = Scene.torus( new Vector3(-2.5f,22,-50) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+		torus2.setColor( 0x0000ff00 );		
 		scene.add( torus2 );
 		
-		// scene.add( Scene.plane( new Vector3(0,torus1.center.y - radius ,0) , new Vector3(0,1,0) ) );
+		scene.add( Scene.plane( new Vector3(0,torus1.center.y - radius ,0) , new Vector3(0,1,0) ) );
 
-		final MyPanel panel = new MyPanel(scene, new Vector3(0,26,-33) , new Vector3(0.02f,-0.294f,-0.9555f) );
+		final MyPanel panel = new MyPanel(scene, new Vector3( 5.656235f,29.03066f,-38.483734f ),new Vector3( -0.4204809f,-0.45482975f,-0.78411967f ) );
 		panel.setMinimumSize( INITIAL_WINDOW_SIZE );
 		panel.setPreferredSize( INITIAL_WINDOW_SIZE );
 
@@ -238,7 +241,11 @@ public class Main
 				float velocity = 1f;
 				switch( e.getKeyChar() ) 
 				{
-					case KEY_SMOOTH_BLEND:
+					case KEY_PRING_CAMERA:
+						System.out.println( "new Vector3"+Main.toStringLong(cam.position)+","+
+											"new Vector3"+Main.toStringLong(cam.direction) );
+						break;
+					case KEY_TOGGLE_SMOOTH_BLEND:
 						for ( SceneObject obj : scene.objects ) {
 							obj.setSmoothBlend( ! obj.smoothBlend );
 							System.out.println("smooth blend: "+obj.smoothBlend);
@@ -435,9 +442,9 @@ public class Main
 				if ( PRINT_TIMINGS ) System.out.println("Actual calculation: "+time3+" ms");
 				if ( RENDER_TO_SCREEN ) 
 				{
-					graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-					graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
-					graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);					
+//					graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+//					graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
+//					graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);					
 					graphics.drawImage( image , 0 , 0, getWidth() , getHeight() , null );
 				}
 			}
@@ -463,10 +470,14 @@ public class Main
 			}
 			final DecimalFormat format = new DecimalFormat("###0.0#");
 			
-			g.setColor(Color.RED);
+			g.setColor(Color.BLUE);
 			g.drawString( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms)" , 10 , 10 );
-			g.drawString( "Eye position  : "+toString(cam.position) , 10, 25 );
-			g.drawString( "View direction: "+toString(cam.direction), 10, 40 );					
+			g.drawString( "Eye position  : "+Main.toString(cam.position) , 10, 25 );
+			g.drawString( "View direction: "+Main.toString(cam.direction), 10, 40 );
+			
+			if ( (frameCounter%30) == 0 ) {
+				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms)");
+			}			
 		}
 
 		private Image renderToImage(final int width,final int height) 
@@ -508,10 +519,11 @@ public class Main
 			if ( ! RENDER_TO_SCREEN ) {
 				return null;
 			}
+			
+			final BufferedImage pixelImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);    
+			pixelImage.setRGB(0, 0, width, height, imageData, 0, width);			 
 
-			final DirectColorModel colorModel =new DirectColorModel(32,0x00FF0000,0x000FF00,0x000000FF,0);
-			final MemoryImageSource mis = new MemoryImageSource(width, height, colorModel, imageData , 0, width);		
-			return createImage( mis );
+			return pixelImage;
 		}
 
 		private void renderImageRegion(int xStart,int yStart,int xEnd,int yEnd,int[] imageData,int imageWidth,int imageHeight) 
@@ -523,7 +535,7 @@ public class Main
 			final Vector3 rayDir = new Vector3();
 			final Vector3 lightVec = new Vector3();
 			final Vector3 normal = new Vector3();
-			// final ClosestHit hit = new ClosestHit();
+			final ClosestHit hit = new ClosestHit();
 
 			for ( int y = yStart ; y < yEnd ; y++ ) 
 			{
@@ -533,19 +545,20 @@ public class Main
 					unproject(currentPoint,w,h);
 					rayDir.set(currentPoint).sub(cam.position);
 
-					final int color = traceViewRay(currentPoint,rayDir,lightVec , normal );
+					final int color = traceViewRay(currentPoint,rayDir,lightVec , normal , hit );
 					imageData[ x + y * imageWidth ] = color;					
 				}
 			}
 		}
 
-		private int traceViewRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal) 
+		private int traceViewRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit) 
 		{
 			float marched = 0;
 			while ( marched < MAX_MARCHING_DISTANCE )
 			{
 				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z );
 				if ( distance <= EPSILON ) {
+					distance = scene.distanceUncached( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
 					break;
 				} 
 				marched += distance;
@@ -557,30 +570,34 @@ public class Main
 
 			if ( marched < MAX_MARCHING_DISTANCE ) 
 			{
-				int color = 0;
+
 				if ( ! ENABLE_LIGHTING ) 
 				{
 					return AMBIENT_COLOR;	
 				}
+				
+				final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
+				
 				scene.populateNormal( pointOnRay , normal ); // calculate normal
 
+				float totalBrightness = 0;
 				for ( int i = 0 ; i < scene.lights.size() ; i++ ) 
 				{
 					PointLight light = scene.lights.get(i);
 					lightVec.set( light.position ).sub( pointOnRay ).nor();
-					float dot = Math.max( 0 ,  normal.dot( lightVec ) );
-					int colorToAdd = 0;
+					float dot =normal.dot( lightVec );
 					if ( dot > 0 ) 
 					{
-						if ( ! ENABLE_SHADOWS || ! isOccluded( pointOnRay , light.position ) ) {
-							colorToAdd = multColor(light.color,dot);
+						if ( ! ENABLE_SHADOWS ) {
+							totalBrightness += dot;
+						} else if ( ! isOccluded( pointOnRay , light.position ) ) {
+							totalBrightness += dot;
 						} else {
-							colorToAdd = multColor(light.color,0.2f);
+							totalBrightness = 0.2f;
 						}
 					}
-					color = addColors( color , colorToAdd );					
 				}
-				return color;
+				return scaleColor( objColor , Math.min(totalBrightness,1.0f));
 			}
 			return BACKGROUND_COLOR;
 		}
@@ -590,6 +607,29 @@ public class Main
 			int r = (color1>>16 & 0xff) + (color2>>16 & 0xff);
 			int g = (color1>>8 & 0xff) + (color2>>8 & 0xff);
 			int b = (color1 & 0xff) + (color2 & 0xff);
+
+//			r /= 2;
+//			g /= 2;
+//			b /= 2;
+			
+			if (r > 255 ) {
+				r = 255;
+			}			
+			if (g > 255 ) {
+				g = 255;
+			}		
+			if (b > 255 ) {
+				b = 255;
+			}				
+			
+			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;
+		}
+		
+		private int multiplyColors(int color1,int color2) {
+
+			int r = (color1>>16 & 0xff) * (color2>>16 & 0xff);
+			int g = (color1>>8 & 0xff) * (color2>>8 & 0xff);
+			int b = (color1 & 0xff) * (color2 & 0xff);
 
 			if (r > 255 ) {
 				r = 255;
@@ -601,9 +641,9 @@ public class Main
 				b = 255;
 			}				
 			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;
-		}
+		}		
 
-		private int multColor(int color,float factor) 
+		private int scaleColor(int color,float factor) 
 		{
 			float r = (color>>16 & 0xff)*factor;
 			if (r > 255 ) {
@@ -645,11 +685,6 @@ public class Main
 			return false;
 		}
 
-
-		private String toString(Vector3 v) {
-			return "( "+v.x+" | "+v.y+" | "+v.z+" )";
-		}
-
 		private void unproject (Vector3 vec, float viewportWidth, float viewportHeight) {
 			float x = vec.x;
 			float y = vec.y;
@@ -660,4 +695,12 @@ public class Main
 			vec.prj(cam.invProjectionView);
 		}		
 	}
+	
+	private static String toString(Vector3 v) {
+		return "( "+v.x+" | "+v.y+" | "+v.z+" )";
+	}
+	
+	private static String toStringLong(Vector3 v) {
+		return "( "+v.x+"f,"+v.y+"f,"+v.z+"f )";
+	}	
 }

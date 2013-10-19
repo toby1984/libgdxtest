@@ -189,7 +189,7 @@ public final class Scene {
 	}
 	
 	public static final class ClosestHit {
-		public SceneObject object;
+		public SceneObject closestObject;
 		public float distance;
 	}
 	
@@ -281,6 +281,31 @@ public final class Scene {
 				distance = d;
 			}
 		}
+		return distance;
+	}	
+	
+	public float distanceUncached(float px,float py,float pz,ClosestHit hit) 
+	{
+		SceneObject closest = objects.get(0);
+		float distance = closest.distance( px,py,pz );
+		final int len = objects.size();
+		for ( int i = 1 ; i < len ; i++) 
+		{
+			final SceneObject obj=objects.get(i);
+			final float d = obj.distance( px,py,pz);
+			if ( obj.smoothBlend ) 
+			{
+				if ( d < distance ) {
+					closest = obj;
+				}					
+				distance = smoothMin( distance , d );
+			} else if ( d < distance ) {
+				distance = d;
+				closest = obj;
+			}
+		}
+		hit.distance = distance;
+		hit.closestObject = closest;
 		return distance;
 	}	
 	

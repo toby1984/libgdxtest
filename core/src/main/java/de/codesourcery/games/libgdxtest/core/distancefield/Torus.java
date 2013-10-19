@@ -28,4 +28,13 @@ public class Torus extends SceneObject {
 		};
 		this.distanceFunction = func; // repetition( 10, 10 , 10 , func);
 	}
+	
+//	@Override
+//	public int getColor(float px, float py, float pz) 
+//	{
+//		int r= (int) (Math.abs( Math.cos(px*0.5) )*255);
+//		int g = (int) (Math.abs( Math.sin(py*2) )*255);
+//		int b = (int) (Math.abs( Math.cos(pz*3) )*255);
+//		return r << 16 | g << 8 | b;
+//	}
 }
