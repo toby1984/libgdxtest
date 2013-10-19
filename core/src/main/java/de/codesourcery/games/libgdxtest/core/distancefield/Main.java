@@ -56,6 +56,7 @@ public class Main
 	protected static final int SLICE_COUNT = CPU_COUNT+1;
 
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
+	protected static final char KEY_TOGGLE_LERP = 'x';			
 	protected static final char KEY_TOGGLE_OCCLUSION = 'o';	
 	protected static final char KEY_TOGGLE_LIGHTING = 'l';	
 	protected static final char KEY_TOGGLE_MOUSELOOK = 27;
@@ -214,6 +215,10 @@ public class Main
 				float velocity = 1f;
 				switch( e.getKeyChar() ) 
 				{
+					case KEY_TOGGLE_LERP:
+						scene.setLerp( ! scene.isLerp() );
+						resetFpsCounter();
+						break;
 					case KEY_TOGGLE_RENDERING:
 						RENDER_TO_SCREEN = ! RENDER_TO_SCREEN;
 						resetFpsCounter();
@@ -428,6 +433,8 @@ public class Main
 					{
 						try {
 							renderImageRegion( x1 , 0 , x2, height , imageData , width , height );
+						} catch(Exception e) {
+							e.printStackTrace();
 						} finally {
 							latch.countDown();
 						}

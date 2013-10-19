@@ -17,8 +17,10 @@ public final class Scene {
 	private final List<SceneObject> objects = new ArrayList<>();
 	public final List<PointLight> lights = new ArrayList<>();
 	
-	private static final float fieldExtend = 10f;
+	private static final float fieldExtend = 20f;
 	private static final Vector3 fieldCenter = new Vector3(0,22,-50);
+	
+	private static final int fieldMask = ~0b1111111;
 	private static final int fieldElements = 128;
 
 	private final float normalCalcDelta;
@@ -28,9 +30,13 @@ public final class Scene {
 	private final float xStart;
 	private final float yStart;
 	private final float zStart;
-	private final float stepX;
-	private final float stepY;
-	private final float stepZ;
+	private final float step;
+	
+	private final float halfStep;
+	
+	private boolean lerp = true;
+	
+	private final float[] distanceBetweenCells = new float[3*3*3];
 	
 	private final AtomicBoolean sceneHasChanged = new AtomicBoolean(true);
 	
@@ -42,16 +48,39 @@ public final class Scene {
 		yStart = fieldCenter.y - (fieldExtend/2.0f);
 		zStart = fieldCenter.z - (fieldExtend/2.0f);
 		
-		stepX = fieldExtend / fieldElements;
-		stepY = fieldExtend / fieldElements;
-		stepZ = fieldExtend / fieldElements;
+		step = fieldExtend / fieldElements;
+		
+		halfStep = step / 2.0f;
 		
 		if ( precompute ) {
-			normalCalcDelta = stepX;
+			normalCalcDelta = step;
 		} else {
 			normalCalcDelta = 0.1f;
-		}		
+		}
+		
+		// calculate lookup table for distances
+		// between neighboring cells so we save a sqrt()
+		// op when lerp()ing in the distance() function
+		float cx = xStart + halfStep;
+		float cy = yStart + halfStep;
+		float cz = zStart + halfStep;
+		for ( int dx = -1 ; dx <= 1 ; dx ++) 
+		{
+			for ( int dy = -1 ; dy <= 1 ; dy ++) 
+			{
+				for ( int dz = -1 ; dz <= 1 ; dz ++) 
+				{
+					float nx = xStart + halfStep + (dx*step);
+					float ny = yStart + halfStep + (dy*step);
+					float nz = zStart + halfStep + (dz*step);
+					float cellDist = (float) Math.sqrt( (nx-cx)*(nx-cx) + (ny-cy)*(ny-cy) + (nz-cz)*(nz-cz) );
+					distanceBetweenCells[ (dx+1) + (dy+1)*3 + (dz+1)*3*3 ] = cellDist;
+				}
+			}
+		}
+		
 	}
+	
 	public static SceneObject sphere(Vector3 center,float radius) {
 		return new Sphere(center,radius);
 	}
@@ -102,20 +131,28 @@ public final class Scene {
 		sceneHasChanged.compareAndSet(true,false);
 	}
 	
+	public void setLerp(boolean yesNo) {
+		this.lerp = yesNo;
+	}
+	
+	public boolean isLerp() {
+		return lerp;
+	}
+	
 	private void calcSlice(final float[] data,int x1 , int x2 ) 
 	{
-		final float xs = xStart + stepX/2.0f;
-		final float ys = yStart + stepY/2.0f;
-		final float zs = zStart + stepZ/2.0f;
+		final float xs = xStart + halfStep;
+		final float ys = yStart + halfStep;
+		final float zs = zStart + halfStep;
 		
 		for ( int x = x1 ; x < x2 ; x++ ) 
 		{
-			float px = xs + ( x * stepX );
+			float px = xs + ( x * step );
 			for ( int y = 0 ; y < fieldElements ; y++ ) 
 			{
-				float py = ys + ( y * stepY );
+				float py = ys + ( y * step );
 				for ( int z = 0 ; z < fieldElements ; z++ ) {
-					float pz = zs + ( z * stepZ );
+					float pz = zs + ( z * step );
 					// blockX+BLOCKS_X*blockY+(BLOCKS_X*BLOCKS_Y)*blockZ
 					data[x + y*fieldElements + z *fieldElements*fieldElements ] = distanceUncached(px,py,pz);
 				}				
@@ -192,12 +229,35 @@ public final class Scene {
 	{
 		if ( precompute ) 
 		{
-			int ix = (int) ( (px - xStart) / stepX );
-			int iy = (int) ( (py - yStart) / stepY );
-			int iz = (int) ( (pz - zStart) / stepZ );
-			if ( ix >= 0 && iy >= 0 && iz >= 0 && ix < fieldElements && iy < fieldElements && iz < fieldElements ) {
+			int ix = (int) ( (px - xStart) / step );
+			int iy = (int) ( (py - yStart) / step );
+			int iz = (int) ( (pz - zStart) / step );
+			if ( (ix & fieldMask) == 0 && (iy & fieldMask) == 0 && (iz & fieldMask) == 0 ) 
+			{
+				float cx = xStart+halfStep+(ix*step);
+				float cy = yStart+halfStep+(iy*step);
+				float cz = zStart+halfStep+(iz*step);
+				
+				int inx = px > cx ? +1 : - 1;
+				int iny = py > cy ? +1 : - 1;
+				int inz = pz > cz ? +1 : - 1;
+				
+				float result = fieldData[ ix + iy*fieldElements + iz *fieldElements*fieldElements ];
+				if ( lerp && ((ix+inx) & fieldMask) == 0 && ((iy+iny) & fieldMask) == 0 && ((iz+inz) & fieldMask) == 0 ) 
+				{
+					float dx = px - cx;
+					float dy = py - cy;
+					float dz = pz - cz;
+					
+					float cellDist = distanceBetweenCells[ inx+1 + (iny+1)*3 + (inz+1)*3*3];
+					float len2 = (float) Math.sqrt(dx*dx+dy*dy+dz*dz);
+					float factor = len2/cellDist;
+					
+					float nv = fieldData[ ix+inx + (iy+iny)*fieldElements + (iz+inz) *fieldElements*fieldElements ];
+					return lerp(result, nv , factor );
+				}
 				// blockX+BLOCKS_X*blockY+(BLOCKS_X*BLOCKS_Y)*blockZ
-				return fieldData[ ix + iy*fieldElements + iz *fieldElements*fieldElements ];
+				return result;
 			} 
 			return fieldExtend*0.9f;
 		}
@@ -212,6 +272,11 @@ public final class Scene {
 			}
 		}
 		return distance;
+	}
+	
+	private float lerp(float a, float b, float w)
+	{
+	  return a + w*(b-a);
 	}
 	
 	public float distanceUncached(float px,float py,float pz) 
