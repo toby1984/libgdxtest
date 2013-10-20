@@ -54,6 +54,8 @@ public class Main
 	protected static final boolean PRINT_TIMINGS = true;
 	public static final boolean DEBUG_HIT_RATIO = true;	
 
+	private static final boolean ANIMATE = false;
+	
 	protected static boolean ENABLE_LIGHTING = true;
 	protected static boolean ENABLE_SHADOWS = true;
 	protected static boolean RENDER_TO_SCREEN = true;
@@ -490,7 +492,9 @@ public class Main
 
 			final Graphics2D graphics = (Graphics2D) g;
 			
-			animator.animate();
+			if ( ANIMATE ) {
+				animator.animate();
+			}
 			
 			/*
 			 * If enabled , pre-compute distance field. 
