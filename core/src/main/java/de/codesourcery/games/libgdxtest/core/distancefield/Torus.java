@@ -2,8 +2,11 @@ package de.codesourcery.games.libgdxtest.core.distancefield;
 
 import com.badlogic.gdx.math.Vector3;
 
-public class Torus extends SceneObject {
+public final class Torus extends SceneObject {
 
+	private final float rInner;
+	private final float rOuter;
+	
 	public Torus(Vector3 center,final float rInner,final float rOuter) 
 	{
 		super(center);
@@ -13,21 +16,21 @@ public class Torus extends SceneObject {
 		if ( rInner < 0 ) {
 			throw new IllegalArgumentException("rOuter must be >= 0 and > rInner ");
 		}	
-		
-		final DistanceFunction func = new DistanceFunction() {
-			
-			@Override
-			public float distance(float px, float py, float pz) {
-				final float qx = len(px,pz)-rOuter;
-				final float qy = py;
-				return len(qx,qy) - rInner;				
-			}
-			private float len(float x,float y) {
-				return (float) Math.sqrt(x*x+y*y);
-			}			
-		};
-		this.distanceFunction = func; // repetition( 10, 10 , 10 , func);
+	
+		this.rInner = rInner;
+		this.rOuter = rOuter;
 	}
+
+	@Override
+	protected float _distance(float px, float py, float pz) {
+		final float qx = len(px,pz)-rOuter;
+		final float qy = py;
+		return len(qx,qy) - rInner;				
+	}
+	
+	private float len(float x,float y) {
+		return (float) Math.sqrt(x*x+y*y);
+	}	
 	
 //	@Override
 //	public int getColor(float px, float py, float pz) 

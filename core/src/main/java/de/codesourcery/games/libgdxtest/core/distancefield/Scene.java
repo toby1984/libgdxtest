@@ -13,72 +13,327 @@ import com.badlogic.gdx.math.Vector3;
 public final class Scene {
 
 	private final ReentrantLock LOCK = new ReentrantLock();
-	
+
 	public final List<SceneObject> objects = new ArrayList<>();
 	public final List<PointLight> lights = new ArrayList<>();
 	
-	private static final float fieldExtend = 20f;
-	private static final Vector3 fieldCenter = new Vector3(0,22,-50);
+	private static final float FIELD_EXTEND = 30f;
+	private static final Vector3 FIELD_CENTER = new Vector3(0,0,0);
 	
-	private static final int fieldMask = ~0b1111111;
-	private static final int fieldElements = 128;
+	private static final int FIELD_LVL0_ELEMENTS = 16; 
+	private static final int FIELD_LVL1_ELEMENTS = 16; 
+
+	private static final float LVL0_CELL_SIZE = FIELD_EXTEND / FIELD_LVL0_ELEMENTS;
+	
+	private static final float HALF_LVL0_CELLSIZE = LVL0_CELL_SIZE / 2.0f;
+	
+	private static final float SQRT_LVL0_CELLSIZE = HALF_LVL0_CELLSIZE * HALF_LVL0_CELLSIZE;
+	
+	private static final float SUBDIVIDE_DISTANCE = (float) Math.sqrt( SQRT_LVL0_CELLSIZE + SQRT_LVL0_CELLSIZE+SQRT_LVL0_CELLSIZE);
 
 	private final float normalCalcDelta;
 	private final boolean precompute;
-	private float[] fieldData = null;
 	
-	private final float xStart;
-	private final float yStart;
-	private final float zStart;
-	public final float step;
+	public volatile DistanceField distanceField = null;
 	
-	private final float halfStep;
-	
-	private boolean lerp = true;
-	
-	private final float[] distanceBetweenCells = new float[3*3*3];
+	private boolean lerp = false;
 	
 	private final AtomicBoolean sceneHasChanged = new AtomicBoolean(true);
 	
 	public Scene(boolean precompute) 
 	{
 		this.precompute = precompute;
-
-		xStart = fieldCenter.x - (fieldExtend/2.0f);
-		yStart = fieldCenter.y - (fieldExtend/2.0f);
-		zStart = fieldCenter.z - (fieldExtend/2.0f);
+		normalCalcDelta = 0.1f;
+	}
+	
+	public final class CellEntry 
+	{
+		public float value;
+		public DistanceField details;
 		
-		step = fieldExtend / fieldElements;
+		public boolean gotDetails;
 		
-		halfStep = step / 2.0f;
-		
-		if ( precompute ) {
-			normalCalcDelta = step;
-		} else {
-			normalCalcDelta = 0.1f;
+		public CellEntry(float value) {
+			this.value = value;
 		}
 		
-		// calculate lookup table for distances
-		// between neighboring cells so we save a sqrt()
-		// op when lerp()ing in the distance() function
-		float cx = xStart + halfStep;
-		float cy = yStart + halfStep;
-		float cz = zStart + halfStep;
-		for ( int dx = -1 ; dx <= 1 ; dx ++) 
+		public CellEntry(float value, DistanceField details) {
+			this.value = value;
+			this.details = details;
+			gotDetails = true;
+		}
+		
+		public void set(float value) {
+			this.value = value;
+			gotDetails = false;
+		}
+		
+		public void set(float value,DistanceField details) {
+			this.value = value;
+			this.details = details;
+			gotDetails = true;
+		}		
+		
+		public float distance(float cx,float cy,float cz) {
+			return gotDetails ? details.secondLevelDistance( cx , cy , cz ) : value;
+		}
+	}
+	
+	public final class DistanceField {
+		
+		private final int elements;
+		
+		private final CellEntry[] cells;
+		
+		private final float cellSize;
+		private final float halfCellSize;
+		
+		private final float minX;
+		private final float minY;
+		private final float minZ;
+		
+		private final float maxX;
+		private final float maxY;
+		private final float maxZ;		
+		
+		public int hits;
+		public int misses;
+		
+		public DistanceField(ThreadPoolExecutor pool,int cpuCount, float centerX, float centerY, float centerZ,float extend, int elements,boolean subdivide) 
 		{
-			for ( int dy = -1 ; dy <= 1 ; dy ++) 
+			super();
+			
+			this.elements = elements;
+			
+			this.cellSize = extend / (float) elements;
+			this.halfCellSize = cellSize / 2.0f;
+			
+			this.minX = centerX - (extend/2.0f);
+			this.minY = centerY - (extend/2.0f);
+			this.minZ = centerZ - (extend/2.0f);
+			
+			this.maxX = centerX + (extend/2.0f);
+			this.maxY = centerY + (extend/2.0f);
+			this.maxZ = centerZ + (extend/2.0f);			
+			
+			final int len = elements*elements*elements;
+			this.cells = new CellEntry[ len ];
+			
+			for ( int i = 0 ; i < len ; i++ ) 
 			{
-				for ( int dz = -1 ; dz <= 1 ; dz ++) 
+				cells[ i ] = new CellEntry(0);
+			}
+			update( pool,cpuCount , subdivide );
+		}
+		
+		public void update(final ThreadPoolExecutor pool,final int cpuCount, final boolean subdivide) 
+		{
+			if ( subdivide ) 
+			{
+				final int sliceSize = elements / cpuCount;
+				final CountDownLatch latch = new CountDownLatch(cpuCount);
+				for ( int i = 0 ; i < elements ; i+= sliceSize ) {
+					final int x0 = i;
+					final int x1 = (x0+sliceSize) < elements ? x0+sliceSize : elements;
+					pool.execute( new Runnable() 
+					{
+						@Override
+						public void run() {
+							try {
+								update(pool,cpuCount,x0,x1,true);
+							} finally {
+								latch.countDown();
+							}
+						}
+						
+					} );
+				}
+				
+				try {
+					latch.await();
+				} catch(Exception e) {
+					e.printStackTrace();
+				}
+			} else {
+				update(pool,cpuCount,0,elements,false);
+			}
+		}
+		
+		private void update(ThreadPoolExecutor pool,int cpuCount,int x0,int x1,boolean subdivide) 
+		{
+			for ( int x = x0 ; x < x1 ; x++ ) 
+			{
+				float cx = minX + halfCellSize + x*cellSize;
+				for ( int y = 0 ; y < elements ; y++ ) 
 				{
-					float nx = xStart + halfStep + (dx*step);
-					float ny = yStart + halfStep + (dy*step);
-					float nz = zStart + halfStep + (dz*step);
-					float cellDist = (float) Math.sqrt( (nx-cx)*(nx-cx) + (ny-cy)*(ny-cy) + (nz-cz)*(nz-cz) );
-					distanceBetweenCells[ (dx+1) + (dy+1)*3 + (dz+1)*3*3 ] = cellDist;
+					float cy = minY + halfCellSize + y*cellSize;
+					for ( int z = 0 ; z < elements ; z++ ) 
+					{
+						float cz = minZ + halfCellSize + z*cellSize;
+						float d = distanceUncached( cx , cy , cz );
+						final CellEntry entry = cells[ x + y*elements + z*elements*elements ];
+						if ( subdivide && Math.abs( d ) <= SUBDIVIDE_DISTANCE ) 
+						{
+							if ( entry.details != null ) 
+							{
+								entry.details.update(pool,cpuCount,false);
+								entry.set( d , entry.details );								
+							} 
+							else 
+							{
+								DistanceField nextLevel = new DistanceField( pool,cpuCount , cx,cy,cz,cellSize,FIELD_LVL1_ELEMENTS,false);
+								entry.set( d , nextLevel );
+							}
+						} else {
+							entry.set( d );
+						}
+					}
+				}
+			}			
+		}
+		
+		public float firstLevelDistance(float px,float py,float pz) 
+		{
+			if ( px < minX || px >= maxX | py < minY || py >= maxY || pz < minZ || pz >= maxZ ) {
+				if ( Main.DEBUG_HIT_RATIO )  misses++;
+				return distanceUncached(px,py,pz);				
+			}
+			
+			int ix = (int) ( (px - minX) / cellSize );
+			int iy = (int) ( (py - minY) / cellSize );
+			int iz = (int) ( (pz - minZ) / cellSize );
+			
+			if ( Main.DEBUG_HIT_RATIO )  hits++;
+			
+			try {
+				CellEntry cell = cells[ix+iy*elements+iz*elements*elements];
+				if ( cell.gotDetails ) {
+					 return cell.details.secondLevelDistance( px,py,pz);
+				}
+				return cell.value;
+			} 
+			catch(ArrayIndexOutOfBoundsException e) 
+			{
+				// on rare occasions, the sloppy floating point comparisons above 
+				// (should've used Math.abs(x - limit ) < EPSILON ) cause an AIOOBE because of rounding issues ,I'll rather
+				// catch those here and go on instead of always taking the performance hit
+				System.out.println("Oops...should've used Math.abs() ...");
+				return distanceUncached( px,py,pz );
+			}
+		}
+		
+		public float secondLevelDistance(float px,float py,float pz) 
+		{
+			int ix = (int) ( ( px - minX ) / cellSize );
+			int iy = (int) ( ( py - minY ) / cellSize );
+			int iz = (int) ( ( pz - minZ ) / cellSize );
+			
+			try {
+				return cells[ix+iy*elements+iz*elements*elements].value;
+			} 
+			catch(ArrayIndexOutOfBoundsException e) 
+			{
+				// on rare occasions, rounding issues cause an AIOOBE here...
+				System.out.println("Something went wrong...");
+				System.err.println("px: "+px+" | py: "+py+" | pz: "+pz);
+				System.err.println("ix: "+ix+" | iy: "+iy+" | iz: "+iz);
+				System.err.println("Field: "+this);
+				return distanceUncached( px,py,pz );
+			}
+		}		
+		
+		@Override
+		public String toString() 
+		{
+			float xMax = minX+(elements*cellSize);
+			float yMax = minY+(elements*cellSize);
+			float zMax = minZ+(elements*cellSize);
+			String result = "DistanceField[ minX: "+minX+" | minY: "+minY+" | minZ: "+minZ+" | " +
+					         " maxX: "+xMax+" | maxY: "+yMax+" | maxZ: "+zMax+" | "+
+ 					        "cellSize: "+cellSize+" | elements: "+elements+" ]";
+			return result;
+		}
+		
+		public void render(DebugRenderer renderer) {
+
+			Color redAlpha = new Color( 255 , 0 , 0 , 128 );
+			Color blueAlpha = new Color( 0 , 0 , 255 , 128 );
+			
+			// renderThisLevelOnly( renderer , redAlpha );
+			
+			renderer.setColor( blueAlpha );
+			
+			for ( int i = 0 ; i < cells.length ; i++ ) {
+				CellEntry cell = cells[i];
+				if ( cell.gotDetails ) {
+					cell.details.renderOutline( renderer );
 				}
 			}
 		}
 		
+		protected void renderOutline(DebugRenderer renderer) {
+
+			float maxX = minX+(elements*cellSize);
+			float maxY = minY+(elements*cellSize);
+			float maxZ = minZ+(elements*cellSize);
+			
+			final int last = elements-1;
+			for ( int x = 0 ; x < elements ; x++ ) 
+			{
+				if ( x != 0 && x != last ) {
+					continue;
+				}
+				float xPos = minX + x*cellSize;				
+				for ( int y = 0 ; y < elements ; y++ ) 
+				{
+					if ( y != 0 && y != last ) {
+						continue;
+					}
+					float yPos = minY + y*cellSize;
+					for ( int z = 0 ; z < elements ; z++ ) 
+					{
+						if ( z != 0 && z != last ) {
+							continue;
+						}						
+						float zPos = minZ + z*cellSize;
+						renderer.render( xPos , yPos , minZ , xPos, yPos , maxZ );
+						renderer.render( minX, yPos , zPos, maxX , yPos , zPos );
+						renderer.render( xPos , minY , zPos, xPos , maxY , zPos );
+					}					
+				}					
+			}			
+		}
+		
+		protected void renderThisLevelOnly(DebugRenderer renderer, Color color) 
+		{
+			float maxX = minX+(elements*cellSize);
+			float maxY = minY+(elements*cellSize);
+			float maxZ = minZ+(elements*cellSize);
+			
+			renderer.setColor( color );
+			for ( int x = 0 ; x < elements ; x++ ) 
+			{
+				float xPos = minX + x*cellSize;				
+				for ( int y = 0 ; y < elements ; y++ ) 
+				{
+					float yPos = minY + y*cellSize;
+					for ( int z = 0 ; z < elements ; z++ ) 
+					{
+						float zPos = minZ + z*cellSize;
+						renderer.render( xPos , yPos , minZ , xPos, yPos , maxZ );
+						renderer.render( minX, yPos , zPos, maxX , yPos , zPos );
+						renderer.render( xPos , minY , zPos, xPos , maxY , zPos );
+					}					
+				}					
+			}
+		}
+	}
+	
+	public interface DebugRenderer {
+		
+		public void setColor(Color color);
+		
+		public void render(float xStart,float yStart,float zStart,float xEnd,float yEnd,float zEnd);
 	}
 	
 	public static SceneObject sphere(Vector3 center,float radius) {
@@ -94,41 +349,40 @@ public final class Scene {
 		return sceneHasChanged.get();
 	}
 	
-	public void precompute(ThreadPoolExecutor pool,int sliceCount) 
+	public void precompute(ThreadPoolExecutor pool,int cpuCount) 
 	{
-		if ( fieldData == null ) {
-			fieldData = new float[ fieldElements * fieldElements * fieldElements ];
-		}
-		final float[] data = fieldData;
-		final int sliceSize = fieldElements / sliceCount;
-		final CountDownLatch latch = new CountDownLatch(sliceCount);
-		
-		for ( int x = 0 ; x < fieldElements ; x += sliceSize ) {
-			final int x1 = x;
-			final int x2;
-			if ( (x1 + sliceSize) >= fieldElements ) {
-				x2 = fieldElements;
-			} else {
-				x2 = x1 + sliceSize;
-			}
-			pool.execute( new Runnable() {
-				@Override
-				public void run() {
-					try {
-						calcSlice(data,x1,x2);
-					} finally {
-						latch.countDown();
-					}
-				}
-			});
+		if ( !sceneHasChanged.get() ) 
+		{
+			return;
 		}
 		
-		try {
-			latch.await();
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
+		if ( distanceField == null ) 
+		{
+			distanceField = new DistanceField( pool,cpuCount,FIELD_CENTER.x , FIELD_CENTER.y , FIELD_CENTER.z , FIELD_EXTEND, FIELD_LVL0_ELEMENTS , true );
+			sceneHasChanged.compareAndSet(true,false);
+			return;
+		} 
+		
+		if ( Main.DEBUG_HIT_RATIO ) {
+			distanceField.hits = 0;
+			distanceField.misses = 0;
+		}			
+		distanceField.update( pool,cpuCount, true );
 		sceneHasChanged.compareAndSet(true,false);
+	}
+	
+	public void renderPrecomputedField(DebugRenderer renderer) {
+		distanceField.render( renderer );
+	}
+	
+	public void printHitRatio() 
+	{
+		if ( distanceField != null ) {
+			float hits = distanceField.hits;
+			float misses = distanceField.misses;
+			float hitRatio = 100*( hits / (hits+misses) );
+			System.out.println("Hits: "+hits+" / misses: "+misses+" / hit ratio: "+hitRatio);
+		}
 	}
 	
 	public void setLerp(boolean yesNo) {
@@ -138,35 +392,6 @@ public final class Scene {
 	public boolean isLerp() {
 		return lerp;
 	}
-	
-	private void calcSlice(final float[] data,int x1 , int x2 ) 
-	{
-		final float xs = xStart + halfStep;
-		final float ys = yStart + halfStep;
-		final float zs = zStart + halfStep;
-		
-		for ( int x = x1 ; x < x2 ; x++ ) 
-		{
-			float px = xs + ( x * step );
-			for ( int y = 0 ; y < fieldElements ; y++ ) 
-			{
-				float py = ys + ( y * step );
-				for ( int z = 0 ; z < fieldElements ; z++ ) {
-					float pz = zs + ( z * step );
-					// blockX+BLOCKS_X*blockY+(BLOCKS_X*BLOCKS_Y)*blockZ
-					data[x + y*fieldElements + z *fieldElements*fieldElements ] = distanceUncached(px,py,pz);
-				}				
-			}	
-		}
-	}
-
-	public void lock() {
-		LOCK.lock();
-	}
-	
-	public void unlock() {
-		LOCK.unlock();
-	}	
 	
 	public static SceneObject torus(Vector3 center,float rInner,float rOuter) {
 		return new Torus(center,rInner,rOuter);
@@ -211,43 +436,14 @@ public final class Scene {
 	{
 		if ( precompute ) 
 		{
-			int ix = (int) ( (px - xStart) / step );
-			int iy = (int) ( (py - yStart) / step );
-			int iz = (int) ( (pz - zStart) / step );
-			if ( (ix & fieldMask) == 0 && (iy & fieldMask) == 0 && (iz & fieldMask) == 0 ) 
-			{
-				float cx = xStart+halfStep+(ix*step);
-				float cy = yStart+halfStep+(iy*step);
-				float cz = zStart+halfStep+(iz*step);
-				
-				int inx = px > cx ? +1 : - 1;
-				int iny = py > cy ? +1 : - 1;
-				int inz = pz > cz ? +1 : - 1;
-				
-				float result = fieldData[ ix + iy*fieldElements + iz *fieldElements*fieldElements ];
-				if ( lerp && ((ix+inx) & fieldMask) == 0 && ((iy+iny) & fieldMask) == 0 && ((iz+inz) & fieldMask) == 0 ) 
-				{
-					float dx = px - cx;
-					float dy = py - cy;
-					float dz = pz - cz;
-					
-					float cellDist = distanceBetweenCells[ inx+1 + (iny+1)*3 + (inz+1)*3*3];
-					float len2 = (float) Math.sqrt(dx*dx+dy*dy+dz*dz);
-					float factor = len2/cellDist;
-					
-					float nv = fieldData[ ix+inx + (iy+iny)*fieldElements + (iz+inz) *fieldElements*fieldElements ];
-					result = lerp(result, nv , factor );
-				}
-				// blockX+BLOCKS_X*blockY+(BLOCKS_X*BLOCKS_Y)*blockZ
-				return result;
-			} 
+			return distanceField.firstLevelDistance(px,py,pz);
 		}
 		return distanceUncached(px, py, pz);
 	}
 	
 	private float smoothMin( float a, float b)
 	{
-		final float k = 0.9f;
+		final float k = 1.5f;
 	    float h = clamp( 0.5f+0.5f*(b-a)/k, 0.0f, 1.0f );
 	    return lerp( b, a, h ) - k*h*(1.0f-h);
 	}	
