@@ -762,19 +762,21 @@ public class Main
 			float rayDirY = pointOnSurface.y - lightPos.y;
 			float rayDirZ = pointOnSurface.z - lightPos.z;
 			
-			final float rayLen = (float) Math.sqrt( rayDirX*rayDirX + rayDirY*rayDirY + rayDirZ*rayDirZ );
-			rayDirX /= rayLen;
-			rayDirY /= rayLen;
-			rayDirZ /= rayLen;
+			final float distToLightSource = (float) Math.sqrt( rayDirX*rayDirX + rayDirY*rayDirY + rayDirZ*rayDirZ );
+			rayDirX /= distToLightSource;
+			rayDirY /= distToLightSource;
+			rayDirZ /= distToLightSource;
 
-			// adjust starting point slightly towards the light source so we're clear of 
-			// the surface we just intersected
+			// I'm marching from the light source to the intersection point and
+			// not the other way around because it's hard to know how far
+			// exactly to move the starting point away from it's original
+			// location so it's clear off the surface that was hit in the first place			
 			float currentPointX = lightPos.x;
 			float currentPointY = lightPos.y;
 			float currentPointZ = lightPos.z;
 
 			float marched = 0;
-			while ( marched <= rayLen )
+			while ( marched < distToLightSource )
 			{
 				float distance = scene.distance( currentPointX , currentPointY, currentPointZ );
 				if ( distance <= EPSILON ) 
