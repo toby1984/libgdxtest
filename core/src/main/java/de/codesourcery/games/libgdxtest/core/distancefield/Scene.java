@@ -1,8 +1,6 @@
 package de.codesourcery.games.libgdxtest.core.distancefield;
 
 import java.awt.Color;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -14,8 +12,8 @@ public final class Scene {
 
 	private final ReentrantLock LOCK = new ReentrantLock();
 
-	public final List<SceneObject> objects = new ArrayList<>();
-	public final List<PointLight> lights = new ArrayList<>();
+	public SceneObject[] objects = new SceneObject[0];
+	public PointLight[] lights = new PointLight[0];
 	
 	private static final float FIELD_EXTEND = 30f;
 	private static final Vector3 FIELD_CENTER = new Vector3(0,0,0);
@@ -24,6 +22,7 @@ public final class Scene {
 	private static final int FIELD_LVL1_ELEMENTS = 16; 
 
 	private static final float LVL0_CELL_SIZE = FIELD_EXTEND / FIELD_LVL0_ELEMENTS;
+	private static final float LVL1_CELL_SIZE = LVL0_CELL_SIZE / FIELD_LVL1_ELEMENTS;
 	
 	private static final float HALF_LVL0_CELLSIZE = LVL0_CELL_SIZE / 2.0f;
 	
@@ -43,7 +42,7 @@ public final class Scene {
 	public Scene(boolean precompute) 
 	{
 		this.precompute = precompute;
-		normalCalcDelta = 0.1f;
+		normalCalcDelta = precompute ? LVL1_CELL_SIZE : 0.1f;
 	}
 	
 	public final class CellEntry 
@@ -405,6 +404,21 @@ public final class Scene {
 		return new PointLight(position, color);
 	}
 	
+	public static SceneObject checkerPlane(Vector3 pointOnPlane,Vector3 planeNormal) {
+		return new Plane(pointOnPlane,planeNormal) 
+		{
+			public int getColor(float px,float py,float pz) 
+			{
+				boolean bx = Math.abs(px % 2) < 1;
+				boolean bz = Math.abs(pz % 2) < 1;
+				if ( bx  && bz || !bx && ! bz) {
+					return 0x00ffffff; 
+				} 
+				return 0;
+			}				
+		};
+	}	
+	
 	public static SceneObject plane(Vector3 pointOnPlane,Vector3 planeNormal) {
 		return new Plane(pointOnPlane,planeNormal);
 	}
@@ -422,14 +436,20 @@ public final class Scene {
 		if (obj == null) {
 			throw new IllegalArgumentException("obj must not be NULL");
 		}
-		this.objects.add( obj );
+		SceneObject[] newArray = new SceneObject[ this.objects.length+1 ];
+		System.arraycopy( this.objects , 0 , newArray , 0 , this.objects.length );
+		newArray[ newArray.length - 1 ] = obj;
+		this.objects = newArray;
 	}
 	
 	public void add(PointLight obj) {
 		if (obj == null) {
 			throw new IllegalArgumentException("obj must not be NULL");
 		}
-		this.lights.add(obj);
+		PointLight[] newArray = new PointLight[ this.lights.length+1 ];
+		System.arraycopy( this.lights , 0 , newArray , 0 , this.lights.length );
+		newArray[ newArray.length - 1 ] = obj;
+		this.lights = newArray;
 	}
 	
 	public float distance(float px,float py,float pz) 
@@ -443,33 +463,19 @@ public final class Scene {
 	
 	private float smoothMin( float a, float b)
 	{
-		final float k = 1.5f;
-	    float h = clamp( 0.5f+0.5f*(b-a)/k, 0.0f, 1.0f );
-	    return lerp( b, a, h ) - k*h*(1.0f-h);
+		final float k = 1f;
+	    float h = Utils.clamp( 0.5f+0.5f*(b-a)/k, 0.0f, 1.0f );
+	    // return lerp( b, a, h ) - k*h*(1.0f-h);
+	    return Utils.lerp( b, a, h ) - k*h*(1.5f-h);
 	}	
-	
-	private float clamp(float a,float min,float max) {
-		if ( a < min ) {
-			return min;
-		}
-		if ( a > max ) {
-			return max;
-		}
-		return a;
-	}
-	
-	private float lerp(float a, float b, float w)
-	{
-	  return a + w*(b-a);
-	}
 	
 	public float distanceUncached(float px,float py,float pz) 
 	{
-		float distance = objects.get(0).distance( px,py,pz );
-		final int len = objects.size();
+		float distance = objects[0].distance( px,py,pz );
+		final int len = objects.length;
 		for ( int i = 1 ; i < len ; i++) 
 		{
-			final SceneObject obj=objects.get(i);
+			final SceneObject obj=objects[i];
 			final float d = obj.distance( px,py,pz);
 			if ( obj.smoothBlend ) {
 				distance = smoothMin( distance , d );
@@ -482,12 +488,12 @@ public final class Scene {
 	
 	public float distanceUncached(float px,float py,float pz,ClosestHit hit) 
 	{
-		SceneObject closest = objects.get(0);
+		SceneObject closest = objects[0];
 		float distance = closest.distance( px,py,pz );
-		final int len = objects.size();
+		final int len = objects.length;
 		for ( int i = 1 ; i < len ; i++) 
 		{
-			final SceneObject obj=objects.get(i);
+			final SceneObject obj=objects[i];
 			final float d = obj.distance( px,py,pz);
 			if ( obj.smoothBlend ) 
 			{

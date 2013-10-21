@@ -45,7 +45,7 @@ public class Main
 
 	protected static boolean RENDER_DISTANCE_FIELD = false;
 
-	protected static final float MAX_MARCHING_DISTANCE = 100;
+	protected static final float MAX_MARCHING_DISTANCE = 150;
 	protected static final float EPSILON = 0.1f;	
 
 	protected static final Vector3 TEMP1 = new Vector3();
@@ -54,7 +54,7 @@ public class Main
 	protected static final boolean PRINT_TIMINGS = true;
 	public static final boolean DEBUG_HIT_RATIO = true;	
 
-	private static final boolean ANIMATE = false;
+	private static final boolean ANIMATE = true;
 	
 	protected static boolean ENABLE_LIGHTING = true;
 	protected static boolean ENABLE_SHADOWS = true;
@@ -63,7 +63,7 @@ public class Main
 	protected final static boolean PRECOMPUTE = false;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
-	protected static final int SLICE_COUNT = CPU_COUNT+1;
+	protected static final int SLICE_COUNT = (int) (CPU_COUNT*2);
 
 	protected static final char KEY_PRING_CAMERA = 'p';	
 	protected static final char KEY_TOGGLE_SHOW_DISTANCE_FIELD = 'f';		
@@ -105,10 +105,10 @@ public class Main
 
 		final Scene scene= new Scene( PRECOMPUTE );
 
-		final Vector3 eyePosition = new Vector3( -2.4639397f,30.889442f,-23.854988f );
-		final Vector3 viewDirection = new Vector3( -0.011355877f,-0.69088244f,0.7228775f );
+		final Vector3 eyePosition = new Vector3( -9.672026f,5.9259033f,-31.723171f );
+		final Vector3 viewDirection = new Vector3( 0.3916041f,-0.061048917f,0.9181042f );
 		
-		scene.add( Scene.pointLight( new Vector3(0,500,0) , new Color( 255 , 255 ,255 ) ) );
+		scene.add( Scene.pointLight( new Vector3(-10,1,-10) , Color.WHITE ) );
 		// scene.add( Scene.pointLight( new Vector3(70,70,-50) , new Color( 210 , 0 ,0 ) ) );		
 
 		final float radius = 1.5f;
@@ -124,15 +124,17 @@ public class Main
 		torus2.setColor( 0x0000ff00 );		
 		scene.add( torus2 );
 		
-		SceneObject torus3 = Scene.torus( new Vector3(-10,10,0) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
-		torus3.setColor( 0x00aaff00 );
-		scene.add( torus3 );
-		
-		SceneObject torus4 = Scene.torus( new Vector3(-10,10,10) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
-		torus4.setColor( 0x0000ffaa );
-		scene.add( torus4 );
+//		SceneObject torus3 = Scene.torus( new Vector3(-10,10,0) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+//		torus3.setColor( 0x00aaff00 );
+//		scene.add( torus3 );
+//		
+//		SceneObject torus4 = Scene.torus( new Vector3(-10,10,10) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+//		torus4.setColor( 0x0000ffaa );
+//		scene.add( torus4 );
 
-		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ) );
+		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
+		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
+		scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
 
 		final Animator animator = new Animator(scene,cube,torus1,torus2);
 
@@ -475,8 +477,7 @@ public class Main
 			Graphics2D graphics = biSrc.createGraphics();
 			graphics.drawImage( image , 0 , 0 , null );
 
-			float data[] = { 0.0625f, 0.125f, 0.0625f, 0.125f, 0.25f, 0.125f,
-					0.0625f, 0.125f, 0.0625f };
+			float data[] = { 0.0625f, 0.125f, 0.0625f, 0.125f, 0.25f, 0.125f, 0.0625f, 0.125f, 0.0625f };
 			Kernel kernel = new Kernel(3, 3, data);
 			ConvolveOp convolve = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP,
 					null);
@@ -666,7 +667,8 @@ public class Main
 				{
 					currentPoint.set(x,y,0);
 					unproject(currentPoint,w,h);
-					rayDir.set(currentPoint).sub(cam.position);
+					
+					rayDir.set(currentPoint).sub(cam.position).nor();
 
 					final int color = traceViewRay(currentPoint,rayDir,lightVec , normal , hit );
 					imageData[ x + y * imageWidth ] = color;					
@@ -677,7 +679,7 @@ public class Main
 		private int traceViewRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit) 
 		{
 			float marched = 0;
-			while ( marched < MAX_MARCHING_DISTANCE )
+			do
 			{
 				float distance;
 				if ( PRECOMPUTE ) {
@@ -685,118 +687,80 @@ public class Main
 				} else {
 					distance = scene.distanceUncached( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
 				}
+				
 				if ( distance <= EPSILON ) 
 				{
+					if ( ! ENABLE_LIGHTING ) 
+					{
+						return AMBIENT_COLOR;	
+					}
+					
+					// ===== BEGIN: Lighting calculation =====
 					if ( PRECOMPUTE ) {
 						distance = scene.distanceUncached( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
 					}
-					break;
+
+					final SceneObject hitObject = hit.closestObject;
+					final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
+
+					scene.populateNormal( pointOnRay , normal ); // calculate normal
+
+					int lightSourcesHit = 0;
+					int r = 0;
+					int g = 0;
+					int b = 0;
+					
+					final PointLight[] lights = scene.lights;
+					final int lightCount = lights.length;
+					for ( int i = 0 ; i < lightCount ; i++ ) 
+					{
+						final PointLight light = lights[i];
+						float lvx = light.position.x - pointOnRay.x;
+						float lvy = light.position.y - pointOnRay.y;
+						float lvz = light.position.z - pointOnRay.z;
+						float distToLight = (float) Math.sqrt( lvx*lvx + lvy*lvy + lvz*lvz );
+						lvx /= distToLight;
+						lvy /= distToLight;
+						lvz /= distToLight;
+						float dot = normal.x*lvx + normal.y*lvy + normal.z * lvz;
+						if ( dot > 0 ) 
+						{
+							if ( ! ENABLE_SHADOWS || ! isOccluded( hitObject , pointOnRay , light.position , hit ) ) 
+							{
+								final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
+								r += ( light.color.x * attenuation * dot );
+								g += ( light.color.y * attenuation * dot );
+								b += ( light.color.z * attenuation * dot );
+								lightSourcesHit++;
+							} 
+						}
+					}
+					
+					if ( lightSourcesHit > 1 ) {
+						r /= lightSourcesHit;
+						g /= lightSourcesHit;
+						b /= lightSourcesHit;
+					}
+					return Utils.addColors( objColor , r , g ,b );
+					// END: Lighting calculation
 				} 
+				
 				marched += distance;
 
 				pointOnRay.x += rayDir.x*distance;
 				pointOnRay.y += rayDir.y*distance;
 				pointOnRay.z += rayDir.z*distance;
-			}
+			} while ( marched < MAX_MARCHING_DISTANCE );
 
-			if ( marched < MAX_MARCHING_DISTANCE ) 
-			{
-
-				if ( ! ENABLE_LIGHTING ) 
-				{
-					return AMBIENT_COLOR;	
-				}
-
-				final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
-
-				scene.populateNormal( pointOnRay , normal ); // calculate normal
-
-				float totalBrightness = 0.2f;
-				for ( int i = 0 ; i < scene.lights.size() ; i++ ) 
-				{
-					PointLight light = scene.lights.get(i);
-					lightVec.set( light.position ).sub( pointOnRay ).nor();
-					float dot = normal.dot( lightVec );
-					if ( dot > 0 ) 
-					{
-						if ( ! ENABLE_SHADOWS ) {
-							totalBrightness += dot;
-						} else if ( ! isOccluded( pointOnRay , light.position ) ) {
-							totalBrightness += dot;
-						} else {
-							totalBrightness = 0.2f;
-						}
-					}
-				}
-				return scaleColor( objColor , Math.min(totalBrightness,1.0f));
-			}
 			return BACKGROUND_COLOR;
 		}
 
-		private int addColors(int color1,int color2) {
-
-			int r = (color1>>16 & 0xff) + (color2>>16 & 0xff);
-			int g = (color1>>8 & 0xff) + (color2>>8 & 0xff);
-			int b = (color1 & 0xff) + (color2 & 0xff);
-
-			//			r /= 2;
-			//			g /= 2;
-			//			b /= 2;
-
-			if (r > 255 ) {
-				r = 255;
-			}			
-			if (g > 255 ) {
-				g = 255;
-			}		
-			if (b > 255 ) {
-				b = 255;
-			}				
-
-			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;
-		}
-
-		private int multiplyColors(int color1,int color2) {
-
-			int r = (color1>>16 & 0xff) * (color2>>16 & 0xff);
-			int g = (color1>>8 & 0xff) * (color2>>8 & 0xff);
-			int b = (color1 & 0xff) * (color2 & 0xff);
-
-			if (r > 255 ) {
-				r = 255;
-			}			
-			if (g > 255 ) {
-				g = 255;
-			}		
-			if (b > 255 ) {
-				b = 255;
-			}				
-			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;
-		}		
-
-		private int scaleColor(int color,float factor) 
-		{
-			float r = (color>>16 & 0xff)*factor;
-			if (r > 255 ) {
-				r = 255;
-			}
-			float g = (color>>8 & 0xff)*factor;
-			if (g > 255 ) {
-				g = 255;
-			}						
-			float b = (color& 0xff)*factor;
-			if (b > 255 ) {
-				b = 255;
-			}						
-			return ((int) r)<< 16 | ((int) g) << 8 | (int) b;			
-		}
-		
-		private boolean isOccluded(Vector3 pointOnSurface,Vector3 lightPos) 
+		private boolean isOccluded(SceneObject hitObject,Vector3 pointOnSurface,Vector3 lightPos,ClosestHit hit) 
 		{
 			// calculate normal vector from point on surface to light position
-			float rayDirX = lightPos.x - pointOnSurface.x;
-			float rayDirY = lightPos.y - pointOnSurface.y;
-			float rayDirZ = lightPos.z - pointOnSurface.z;
+			float rayDirX = pointOnSurface.x - lightPos.x;
+			float rayDirY = pointOnSurface.y - lightPos.y;
+			float rayDirZ = pointOnSurface.z - lightPos.z;
 			
 			final float rayLen = (float) Math.sqrt( rayDirX*rayDirX + rayDirY*rayDirY + rayDirZ*rayDirZ );
 			rayDirX /= rayLen;
@@ -805,21 +769,18 @@ public class Main
 
 			// adjust starting point slightly towards the light source so we're clear of 
 			// the surface we just intersected
-			float currentPointX = pointOnSurface.x + rayDirX*2;
-			float currentPointY = pointOnSurface.y + rayDirY*2;
-			float currentPointZ = pointOnSurface.z + rayDirZ*2;
+			float currentPointX = lightPos.x;
+			float currentPointY = lightPos.y;
+			float currentPointZ = lightPos.z;
 
-			float distanceToLightX = lightPos.x - currentPointX;
-			float distanceToLightY = lightPos.y - currentPointY;
-			float distanceToLightZ = lightPos.z - currentPointZ;
-			
-			float distanceToLight = (float) Math.sqrt( distanceToLightX*distanceToLightX + distanceToLightY*distanceToLightY + distanceToLightZ* distanceToLightZ );
 			float marched = 0;
-			while ( marched < distanceToLight )
+			while ( marched <= rayLen )
 			{
 				float distance = scene.distance( currentPointX , currentPointY, currentPointZ );
-				if ( distance <= EPSILON ) {
-					return true;
+				if ( distance <= EPSILON ) 
+				{
+					scene.distanceUncached( currentPointX , currentPointY, currentPointZ , hit );
+					return hit.closestObject != hitObject;
 				} 
 				marched += distance;
 
