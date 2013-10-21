@@ -133,8 +133,8 @@ public class Main
 //		scene.add( torus4 );
 
 		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
-		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
-		scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
+		// scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
+		// scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
 
 		final Animator animator = new Animator(scene,cube,torus1,torus2);
 
@@ -705,7 +705,7 @@ public class Main
 
 					scene.populateNormal( pointOnRay , normal ); // calculate normal
 
-					int lightSourcesHit = 0;
+					int numLightSourcesHit = 0;
 					int r = 0;
 					int g = 0;
 					int b = 0;
@@ -731,15 +731,15 @@ public class Main
 								r += ( light.color.x * attenuation * dot );
 								g += ( light.color.y * attenuation * dot );
 								b += ( light.color.z * attenuation * dot );
-								lightSourcesHit++;
+								numLightSourcesHit++;
 							} 
 						}
 					}
 					
-					if ( lightSourcesHit > 1 ) {
-						r /= lightSourcesHit;
-						g /= lightSourcesHit;
-						b /= lightSourcesHit;
+					if ( numLightSourcesHit > 1 ) {
+						r /= numLightSourcesHit;
+						g /= numLightSourcesHit;
+						b /= numLightSourcesHit;
 					}
 					return Utils.addColors( objColor , r , g ,b );
 					// END: Lighting calculation
