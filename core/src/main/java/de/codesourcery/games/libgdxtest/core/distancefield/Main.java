@@ -45,7 +45,7 @@ public class Main
 
 	protected static boolean RENDER_DISTANCE_FIELD = false;
 
-	protected static final float MAX_MARCHING_DISTANCE = 150;
+	protected static final float MAX_MARCHING_DISTANCE = 100;
 	protected static final float EPSILON = 0.1f;	
 
 	protected static final Vector3 TEMP1 = new Vector3();

@@ -5,6 +5,7 @@ import com.badlogic.gdx.math.Vector3;
 
 public abstract class SceneObject {
 
+	// matrix used to convert points to object space
 	public final Matrix4 matrix = new Matrix4().idt();
 	public final Vector3 center = new Vector3();
 	
@@ -41,6 +42,7 @@ public abstract class SceneObject {
 	public final float distance(float px, float py, float pz) 
 	{
 		final float coeff[] = matrix.val;
+		// transform point to object space
 		float newX = px * coeff[Matrix4.M00] + py * coeff[Matrix4.M01] + pz * coeff[Matrix4.M02] + coeff[Matrix4.M03];
 		float newY = px * coeff[Matrix4.M10] + py * coeff[Matrix4.M11] + pz * coeff[Matrix4.M12] + coeff[Matrix4.M13];
 		float newZ = px * coeff[Matrix4.M20] + py * coeff[Matrix4.M21] + pz * coeff[Matrix4.M22] + coeff[Matrix4.M23];
