@@ -45,7 +45,7 @@ public class Main
 
 	protected static boolean RENDER_DISTANCE_FIELD = false;
 
-	protected static final float MAX_MARCHING_DISTANCE = 100;
+	protected static final float MAX_MARCHING_DISTANCE = 150;
 	protected static final float EPSILON = 0.1f;	
 
 	protected static final Vector3 TEMP1 = new Vector3();
@@ -63,7 +63,7 @@ public class Main
 	protected final static boolean PRECOMPUTE = false;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
-	protected static final int SLICE_COUNT = (int) (CPU_COUNT*2);
+	protected static final int SLICE_COUNT = (int) CPU_COUNT*2;
 
 	protected static final char KEY_PRING_CAMERA = 'p';	
 	protected static final char KEY_TOGGLE_SHOW_DISTANCE_FIELD = 'f';		
@@ -87,8 +87,8 @@ public class Main
 	static 
 	{
 		System.loadLibrary("gdx64");
-		 System.setProperty("sun.java2d.opengl.fbobject","false");
-		 System.setProperty("sun.java2d.opengl","True");				
+		System.setProperty("sun.java2d.opengl.fbobject","false");
+		System.setProperty("sun.java2d.opengl","True");				
 	}
 
 	public static void main(String[] args) {
@@ -133,8 +133,8 @@ public class Main
 //		scene.add( torus4 );
 
 		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
-		// scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
-		// scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
+		 scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
+		 scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
 
 		final Animator animator = new Animator(scene,cube,torus1,torus2);
 
@@ -614,26 +614,32 @@ public class Main
 				System.out.println("Allocated image data.");
 			} 
 
-			final CountDownLatch latch = new CountDownLatch( SLICE_COUNT );
+			final CountDownLatch latch = new CountDownLatch( SLICE_COUNT*SLICE_COUNT );
 			int xStep = width / SLICE_COUNT;
+			int yStep = width / SLICE_COUNT;			
 			for ( int x = 0 ; x < width ; x+=xStep) 
 			{
 				final int x1 = x;
 				final int x2 =  (x1+xStep) >= width ? width :  x1 + xStep;
-
-				threadPool.execute( new Runnable() {
-					@Override
-					public void run() 
-					{
-						try {
-							renderImageRegion( x1 , 0 , x2, height , imageData , width , height );
-						} catch(Exception e) {
-							e.printStackTrace();
-						} finally {
-							latch.countDown();
+				for ( int y = 0 ; y < height ; y+=yStep) 
+				{
+					final int y1 = y;
+					final int y2 =  (y1+yStep) >= height ? height :  y1 + yStep;
+					threadPool.execute( new Runnable() {
+						@Override
+						public void run() 
+						{
+							try {
+								// xStart , yStart , xEnd , yEnd 
+								renderImageRegion( x1 , y1 , x2, y2 , imageData , width , height );
+							} catch(Exception e) {
+								e.printStackTrace();
+							} finally {
+								latch.countDown();
+							}
 						}
-					}
-				});
+					});
+				}
 			}
 
 			try 
