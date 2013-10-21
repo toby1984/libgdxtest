@@ -136,8 +136,8 @@ public class Main
 //		scene.add( torus4 );
 
 		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
-//		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
-//		scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
+		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
+		scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
 
 		final Animator animator = new Animator(scene,cube,torus1,torus2);
 
@@ -711,7 +711,7 @@ inner:
 					} 
 					
 					imageData[ x + y * imageWidth ] = color;
-					final float jumpDistance = traceResult.minDistance > EPSILON ? traceResult.distanceMarched*0.95f : 0;
+					final float jumpDistance = traceResult.minDistance > EPSILON ? traceResult.distanceMarched*0.99f : 0;
 					if ( xBoundardNotReached ) 
 					{
 						// trace ray #2
@@ -722,6 +722,7 @@ inner:
 						currentPoint.x += rayDir.x*jumpDistance;
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
+						
 						imageData[ (x+1) + y * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );						
 					}
 
@@ -777,6 +778,7 @@ inner:
 				if ( distance <= EPSILON ) 
 				{
 					result.distanceMarched = marched;
+					result.minDistance = minDistance;
 					
 					if ( ! ENABLE_LIGHTING ) 
 					{
