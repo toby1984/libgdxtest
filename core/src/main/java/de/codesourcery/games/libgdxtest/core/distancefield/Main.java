@@ -675,7 +675,7 @@ public class Main
 			final Vector3 normal = new Vector3();
 			final ClosestHit hit = new ClosestHit();
 			final TraceResult traceResult = new TraceResult();
-
+			
 			for ( int y = yStart ; y < yEnd ; y+=2 ) 
 			{
 inner:				
@@ -689,10 +689,9 @@ inner:
 					unproject(currentPoint,w,h);
 					rayDir.set(currentPoint).sub(cam.position).nor();
 
+					traceResult.rayLengthLimitReached=false;
 					int color = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
-					final boolean skipBundle = traceResult.rayLengthLimitReached && traceResult.minDistance > EPSILON;
-					
-					if ( skipBundle ) 
+					if ( traceResult.rayLengthLimitReached && traceResult.minDistance > EPSILON*2 ) 
 					{
 						if ( xBoundardNotReached && yBoundardNotReached ) {
 							imageData[ x     +  y * imageWidth ]    = BACKGROUND_COLOR;		
@@ -710,22 +709,33 @@ inner:
 						}
 						continue inner;
 					} 
-					imageData[ x + y * imageWidth ] = color;
 					
-					if ( xBoundardNotReached ) {
+					imageData[ x + y * imageWidth ] = color;
+					final float jumpDistance = traceResult.minDistance > EPSILON ? traceResult.distanceMarched*0.95f : 0;
+					if ( xBoundardNotReached ) 
+					{
 						// trace ray #2
 						currentPoint.set(x+1,y,0);
 						unproject(currentPoint,w,h);
 						rayDir.set(currentPoint).sub(cam.position).nor();
-						imageData[ (x+1) + y * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+						
+						currentPoint.x += rayDir.x*jumpDistance;
+						currentPoint.y += rayDir.y*jumpDistance;
+						currentPoint.z += rayDir.z*jumpDistance;
+						imageData[ (x+1) + y * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );						
 					}
-					
-					// trace #ray #3
+
 					if ( yBoundardNotReached ) 
 					{
+						// trace #ray #3
 						currentPoint.set(x,y+1,0);
 						unproject(currentPoint,w,h);
 						rayDir.set(currentPoint).sub(cam.position).nor();
+						
+						currentPoint.x += rayDir.x*jumpDistance;
+						currentPoint.y += rayDir.y*jumpDistance;
+						currentPoint.z += rayDir.z*jumpDistance;
+						
 						imageData[ x + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 						
 						// trace ray #4
@@ -733,6 +743,11 @@ inner:
 							currentPoint.set(x+1,y+1,0);
 							unproject(currentPoint,w,h);
 							rayDir.set(currentPoint).sub(cam.position).nor();
+							
+							currentPoint.x += rayDir.x*jumpDistance;
+							currentPoint.y += rayDir.y*jumpDistance;
+							currentPoint.z += rayDir.z*jumpDistance;
+							
 							imageData[ (x+1) + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 						}
 					}
@@ -741,16 +756,15 @@ inner:
 		}
 		
 		protected static final class TraceResult {
-			public int pixelColor;
 			public boolean rayLengthLimitReached;
 			public float minDistance;
+			public float distanceMarched;
 		}
 		
 		private int traceViewRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit,TraceResult result) 
 		{
 			float marched = 0;
 			float minDistance = Float.MAX_VALUE;
-			
 			do
 			{
 				float distance;
@@ -762,7 +776,7 @@ inner:
 				
 				if ( distance <= EPSILON ) 
 				{
-					result.rayLengthLimitReached = false;
+					result.distanceMarched = marched;
 					
 					if ( ! ENABLE_LIGHTING ) 
 					{

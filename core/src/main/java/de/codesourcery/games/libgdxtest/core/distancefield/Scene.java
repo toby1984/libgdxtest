@@ -6,13 +6,10 @@ import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
 
 import com.badlogic.gdx.math.Vector3;
 
 public final class Scene {
-
-	private final ReentrantLock LOCK = new ReentrantLock();
 
 	public SceneObject[] objects = new SceneObject[0];
 	public PointLight[] lights = new PointLight[0];
