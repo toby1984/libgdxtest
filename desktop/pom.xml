@@ -13,7 +13,8 @@
 	<name>Main desktop</name>
 
 	<properties>
-		<mainClass>de.codesourcery.games.libgdxtest.java.MainDesktop</mainClass>
+		<!-- <mainClass>de.codesourcery.games.libgdxtest.java.MainDesktop</mainClass> -->
+		<mainClass>de.codesourcery.games.libgdxtest.core.distancefield.Main</mainClass>
 	</properties>
 
 	<dependencies>
