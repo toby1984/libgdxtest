@@ -55,7 +55,7 @@ public class Main
 	public static final boolean DEBUG_HIT_RATIO = false;	
 	
 	public static final boolean BENCHMARK_MODE = true;
-	public static final int BENCHMARK_FRAMECOUNT = 300;
+	public static final int BENCHMARK_FRAMECOUNT = 200;
 
 	private static final boolean ANIMATE = true;
 	
@@ -63,7 +63,7 @@ public class Main
 	protected static boolean ENABLE_SHADOWS = true;
 	protected static boolean RENDER_TO_SCREEN = true;
 
-	protected final static boolean PRECOMPUTE = false;
+	protected final static boolean PRECOMPUTE = true;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
 	protected static final int SLICE_COUNT = (int) CPU_COUNT*2;
@@ -141,7 +141,7 @@ public class Main
 
 		final Animator animator = new Animator(scene,cube,torus1,torus2);
 
-		final MyPanel panel = new MyPanel(scene, eyePosition,viewDirection , animator );
+		final MyPanel panel = new MyPanel(scene, eyePosition,viewDirection , animator , CALCULATED_IMAGE_SIZE.width , CALCULATED_IMAGE_SIZE.height );
 		panel.setMinimumSize( INITIAL_WINDOW_SIZE );
 		panel.setPreferredSize( INITIAL_WINDOW_SIZE );
 
@@ -281,6 +281,9 @@ public class Main
 
 		// @GuardedBy(FPS_COUNTER_LOCK)
 		private long totalFrameTime = 0;
+		
+		private final float viewportWidth;
+		private final float viewportHeight;
 
 		private final KeyAdapter adapter = new KeyAdapter() 
 		{
@@ -418,11 +421,13 @@ public class Main
 			}
 		};
 
-		public MyPanel(Scene scene,Vector3 eyePosition,Vector3 viewDirection,Animator animator) 
+		public MyPanel(Scene scene,Vector3 eyePosition,Vector3 viewDirection,Animator animator,float viewportWidth,float viewportHeight) 
 		{
 			if (scene == null) {
 				throw new IllegalArgumentException("scene must not be NULL");
 			}
+			this.viewportHeight = viewportHeight;
+			this.viewportWidth = viewportWidth;
 			this.scene = scene;
 			this.animator = animator;
 
@@ -589,13 +594,16 @@ public class Main
 			{
 				totalFrameTime += time;
 				frameCounter++;
-				if ( BENCHMARK_MODE && frameCounter == BENCHMARK_FRAMECOUNT ) 
-				{
-					System.out.println("Benchmark mode,exiting after "+BENCHMARK_FRAMECOUNT+" frames.");
-					System.exit(0);
-				}				
+				
 				fps = 1000f/time;
 				avgFps = 1000f/ ( totalFrameTime / frameCounter );
+				
+				if ( BENCHMARK_MODE && frameCounter == BENCHMARK_FRAMECOUNT ) 
+				{
+					
+					System.out.println("Benchmark mode,exiting after "+BENCHMARK_FRAMECOUNT+" frames (avg. FPS: "+avgFps+")");
+					System.exit(0);
+				}					
 			}
 
 			if ( ! RENDER_TO_SCREEN ) {
@@ -666,71 +674,77 @@ public class Main
 
 		private void renderImageRegion(int xStart,int yStart,int xEnd,int yEnd,int[] imageData,int imageWidth,int imageHeight) 
 		{
-			final int w = imageWidth;
-			final int h = imageHeight;
-
 			final Vector3 currentPoint = new Vector3();
 			final Vector3 rayDir = new Vector3();
 			final Vector3 lightVec = new Vector3();
 			final Vector3 normal = new Vector3();
 			final ClosestHit hit = new ClosestHit();
 			final TraceResult traceResult = new TraceResult();
-			
-			for ( int y = yStart ; y < yEnd ; y+=2 ) 
+
+			int y = yStart;
+			boolean yBoundardNotReached = (y+1) < yEnd;
+			while( yBoundardNotReached ) 
 			{
-inner:				
-				for ( int x = xStart ; x < xEnd ; x+=2 )
+				int x = xStart;
+				boolean xBoundardNotReached = (x+1) < xEnd;
+				while ( xBoundardNotReached )
 				{
-					final boolean xBoundardNotReached = (x+1) < xEnd;
-					final boolean yBoundardNotReached = (y+1) < yEnd;	
-					
 					// trace ray #1
 					currentPoint.set(x,y,0);
-					unproject(currentPoint,w,h);
+					unproject(currentPoint);
 					rayDir.set(currentPoint).sub(cam.position).nor();
 
-					traceResult.rayLengthLimitReached=false;
-					int color = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
-					if ( traceResult.rayLengthLimitReached && traceResult.minDistance > EPSILON*2 ) 
-					{
-						if ( xBoundardNotReached && yBoundardNotReached ) {
-							imageData[ x     +  y * imageWidth ]    = BACKGROUND_COLOR;		
-							imageData[ (x+1) +  y * imageWidth ]    = BACKGROUND_COLOR;
-							imageData[ x     + (y+1) * imageWidth ] = BACKGROUND_COLOR;
-							imageData[ (x+1) + (y+1) * imageWidth ] = BACKGROUND_COLOR;
-						} else if ( ! xBoundardNotReached && yBoundardNotReached ) {
-							imageData[ x     +  y * imageWidth ]    = BACKGROUND_COLOR;		
-							imageData[ x     + (y+1) * imageWidth ] = BACKGROUND_COLOR;
-						} else if ( xBoundardNotReached && ! yBoundardNotReached ) {
-							imageData[ x     +  y * imageWidth ]    = BACKGROUND_COLOR;		
-							imageData[ (x+1) +  y * imageWidth ]    = BACKGROUND_COLOR;
-						} else {
-							imageData[ x     +  y * imageWidth ]    = BACKGROUND_COLOR;		
-						}
-						continue inner;
-					} 
+					imageData[ x + y * imageWidth ]  = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+					final float jumpDistance;
+					if ( traceResult.minDistance > EPSILON  ) {
+						jumpDistance = traceResult.distanceMarched*0.99f; 
+					} else {
+						jumpDistance = 0;
+					}
 					
-					imageData[ x + y * imageWidth ] = color;
-					final float jumpDistance = traceResult.minDistance > EPSILON ? traceResult.distanceMarched*0.99f : 0;
 					if ( xBoundardNotReached ) 
 					{
 						// trace ray #2
 						currentPoint.set(x+1,y,0);
-						unproject(currentPoint,w,h);
+						unproject(currentPoint);
 						rayDir.set(currentPoint).sub(cam.position).nor();
 						
 						currentPoint.x += rayDir.x*jumpDistance;
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
 						
-						imageData[ (x+1) + y * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );						
-					}
-
-					if ( yBoundardNotReached ) 
+						imageData[ (x+1) + y * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );			
+						
+						if ( yBoundardNotReached ) 
+						{
+							// trace #ray #3
+							currentPoint.set(x,y+1,0);
+							unproject(currentPoint);
+							rayDir.set(currentPoint).sub(cam.position).nor();
+							
+							currentPoint.x += rayDir.x*jumpDistance;
+							currentPoint.y += rayDir.y*jumpDistance;
+							currentPoint.z += rayDir.z*jumpDistance;
+							
+							imageData[ x + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+							
+							// ray #4
+							currentPoint.set(x+1,y+1,0);
+							unproject(currentPoint);
+							rayDir.set(currentPoint).sub(cam.position).nor();
+							
+							currentPoint.x += rayDir.x*jumpDistance;
+							currentPoint.y += rayDir.y*jumpDistance;
+							currentPoint.z += rayDir.z*jumpDistance;
+							
+							imageData[ (x+1) + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );							
+						}
+					} 
+					else if ( yBoundardNotReached ) 
 					{
 						// trace #ray #3
 						currentPoint.set(x,y+1,0);
-						unproject(currentPoint,w,h);
+						unproject(currentPoint);
 						rayDir.set(currentPoint).sub(cam.position).nor();
 						
 						currentPoint.x += rayDir.x*jumpDistance;
@@ -738,26 +752,16 @@ inner:
 						currentPoint.z += rayDir.z*jumpDistance;
 						
 						imageData[ x + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
-						
-						// trace ray #4
-						if ( xBoundardNotReached ) {
-							currentPoint.set(x+1,y+1,0);
-							unproject(currentPoint,w,h);
-							rayDir.set(currentPoint).sub(cam.position).nor();
-							
-							currentPoint.x += rayDir.x*jumpDistance;
-							currentPoint.y += rayDir.y*jumpDistance;
-							currentPoint.z += rayDir.z*jumpDistance;
-							
-							imageData[ (x+1) + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
-						}
 					}
+					x+=2;
+					xBoundardNotReached = (x+1) < xEnd;
 				}
+				y += 2;
+				yBoundardNotReached = (y+1) < yEnd;
 			}
 		}
 		
 		protected static final class TraceResult {
-			public boolean rayLengthLimitReached;
 			public float minDistance;
 			public float distanceMarched;
 		}
@@ -766,7 +770,7 @@ inner:
 		{
 			float marched = 0;
 			float minDistance = Float.MAX_VALUE;
-			do
+			while ( marched < MAX_MARCHING_DISTANCE )
 			{
 				float distance;
 				if ( PRECOMPUTE ) {
@@ -844,10 +848,10 @@ inner:
 				pointOnRay.x += rayDir.x*distance;
 				pointOnRay.y += rayDir.y*distance;
 				pointOnRay.z += rayDir.z*distance;
-			} while ( marched < MAX_MARCHING_DISTANCE );
+			}
 
-			result.rayLengthLimitReached = true;
 			result.minDistance = minDistance;
+			result.distanceMarched = marched;
 			return BACKGROUND_COLOR;
 		}
 
@@ -871,17 +875,20 @@ inner:
 			float currentPointY = lightPos.y;
 			float currentPointZ = lightPos.z;
 
-			float marched = 0;
-			while ( marched < distToLightSource )
+			float distance=0;
+			for ( float marched = 0 ; marched < distToLightSource ; marched += distance )
 			{
-				float distance = scene.distance( currentPointX , currentPointY, currentPointZ );
+				if ( PRECOMPUTE ) {
+					distance = scene.distance( currentPointX , currentPointY, currentPointZ );
+				} else {
+					distance = scene.distanceUncached( currentPointX , currentPointY, currentPointZ );
+				}
+				
 				if ( distance <= EPSILON ) 
 				{
 					scene.distanceUncached( currentPointX , currentPointY, currentPointZ , hit );
 					return hit.closestObject != hitObject;
 				} 
-				marched += distance;
-
 				currentPointX += rayDirX*distance;
 				currentPointY += rayDirY*distance;
 				currentPointZ += rayDirZ*distance;
@@ -889,7 +896,7 @@ inner:
 			return false;
 		}
 
-		private void unproject (Vector3 vec, float viewportWidth, float viewportHeight) {
+		private void unproject (Vector3 vec) {
 			float x = vec.x;
 			float y = vec.y;
 			y = viewportHeight - y - 1;

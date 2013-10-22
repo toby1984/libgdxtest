@@ -7,6 +7,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import sun.misc.Unsafe;
+
 import com.badlogic.gdx.math.Vector3;
 
 public final class Scene {
@@ -485,6 +487,23 @@ public final class Scene {
 		return distance;
 	}	
 	
+	public float distanceUncachedUnsafe(float px,float py,float pz) 
+	{
+		float distance = objects[0].distance( px,py,pz );
+		final int len = objects.length;
+		for ( int i = 1 ; i < len ; i++) 
+		{
+			final SceneObject obj=objects[i];
+			final float d = obj.distance( px,py,pz);
+			if ( obj.smoothBlend ) {
+				distance = smoothMin( distance , d );
+			} else if ( d < distance ) {
+				distance = d;
+			}
+		}
+		return distance;
+	}	
+	
 	public float distanceUncached(float px,float py,float pz,ClosestHit hit) 
 	{
 		SceneObject closest = objects[0];
@@ -516,41 +535,5 @@ public final class Scene {
 		final float deltaY = distance( p.x    , p.y+normalCalcDelta , p.z )     - distance( p.x    , p.y-normalCalcDelta , p.z );
 		final float deltaZ = distance( p.x    , p.y    , p.z +normalCalcDelta ) - distance( p.x    , p.y    , p.z-normalCalcDelta );
 		normalVector.set(deltaX,deltaY,deltaZ).nor();
-	}
-	
-	public static void main(String[] args) {
-		
-		/*
-		 * xWidth = 1
-		 * yWidth = 2
-		 * zWidth = 3
-		 * 
-		 * index = x + y*3 + 3*4*z
-		 * 
-		 * x=0 , y = 0 , z = 0 => 0
-		 * x=0 , y = 1 , z = 0 => 3
-		 * x=1 , y = 1 , z = 0 => 4
-		 * x=0 , y = 0 , z = 1 => 12
-		 * x=0 , y = 1 , z = 1 => 15
-		 * 
-		 */
-		
-		int maxX = 2;
-		int maxY = 3;
-		int maxZ = 4;
-		final Map<Integer,String> map = new TreeMap<>();
-		for ( int x = 0 ; x < maxX ; x++ ) {
-			for ( int y = 0 ; y < maxY ; y++ ) {
-				for ( int z = 0 ; z < maxZ ; z++ ) 
-				{
-					int index = x + y*maxX + maxX*maxY*z;
-					String s = "("+x+","+y+","+z+") => "+index;
-					map.put( index , s );
-				}	
-			}
-		}
-		for ( Entry<Integer, String> entry : map.entrySet() ) {
-			System.out.println( entry.getKey() +" => "+entry.getValue() );
-		}
 	}	
 }
