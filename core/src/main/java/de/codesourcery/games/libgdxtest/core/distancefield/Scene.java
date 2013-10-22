@@ -439,6 +439,7 @@ public final class Scene {
 	public static final class ClosestHit {
 		public SceneObject closestObject;
 		public float distance;
+		public float occlusionFactor;
 	}
 	
 	public void add(SceneObject obj) {

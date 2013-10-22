@@ -43,10 +43,12 @@ public class Main
 	protected static final Dimension CALCULATED_IMAGE_SIZE = new Dimension(512,512);
 	protected static final Dimension INITIAL_WINDOW_SIZE = new Dimension(640,480);
 
+	protected static final int MAX_STEPS = 81;
+	
 	protected static boolean RENDER_DISTANCE_FIELD = false;
 
 	protected static final float MAX_MARCHING_DISTANCE = 150;
-	protected static final float EPSILON = 0.1f;	
+	protected static final float EPSILON = 0.2f;	
 
 	protected static final Vector3 TEMP1 = new Vector3();
 	protected static final Vector3 TEMP2 = new Vector3();
@@ -574,10 +576,12 @@ public class Main
 
 			float fps;
 			float avgFps;
+			long frames;
 			synchronized(FPS_COUNTER_LOCK) 
 			{
 				totalFrameTime += time;
 				frameCounter++;
+				frames=frameCounter;
 				
 				fps = 1000f/time;
 				avgFps = 1000f/ ( totalFrameTime / frameCounter );
@@ -602,7 +606,7 @@ public class Main
 			g.drawString( "View direction: "+Main.toString(cam.direction), 10, 40 );
 
 			if ( (frameCounter%30) == 0 ) {
-				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms)");
+				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms , "+frames+" frames)");
 			}			
 		}
 
@@ -678,7 +682,7 @@ public class Main
 					unproject(currentPoint);
 					rayDir.set(currentPoint).sub(cam.position).nor();
 
-					imageData[ x + y * imageWidth ]  = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+					imageData[ x + y * imageWidth ]  = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 					final float jumpDistance;
 					if ( traceResult.minDistance > EPSILON  ) {
 						jumpDistance = traceResult.distanceMarched*0.99f; 
@@ -697,7 +701,7 @@ public class Main
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
 						
-						imageData[ (x+1) + y * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );			
+						imageData[ (x+1) + y * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );			
 						
 						if ( yBoundardNotReached ) 
 						{
@@ -710,7 +714,7 @@ public class Main
 							currentPoint.y += rayDir.y*jumpDistance;
 							currentPoint.z += rayDir.z*jumpDistance;
 							
-							imageData[ x + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+							imageData[ x + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 							
 							// ray #4
 							currentPoint.set(x+1,y+1,0);
@@ -721,7 +725,7 @@ public class Main
 							currentPoint.y += rayDir.y*jumpDistance;
 							currentPoint.z += rayDir.z*jumpDistance;
 							
-							imageData[ (x+1) + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );							
+							imageData[ (x+1) + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );							
 						}
 					} 
 					else if ( yBoundardNotReached ) 
@@ -735,7 +739,7 @@ public class Main
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
 						
-						imageData[ x + (y+1) * imageWidth ] = traceViewRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+						imageData[ x + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 					}
 					x+=2;
 					xBoundardNotReached = (x+1) < xEnd;
@@ -750,7 +754,7 @@ public class Main
 			public float distanceMarched;
 		}
 		
-		private int traceViewRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit,TraceResult result) 
+		private int tracePrimaryRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit,TraceResult result) 
 		{
 			float marched = 0;
 			float minDistance = Float.MAX_VALUE;
@@ -798,22 +802,23 @@ public class Main
 						float dot = normal.x*lvx + normal.y*lvy + normal.z * lvz;
 						if ( dot > 0 ) 
 						{
-							if ( ! isOccluded( hitObject , pointOnRay , light.position , hit ) ) 
+							float shadowFactor = calcShadowFactor( hitObject , pointOnRay , light.position , hit );
+							final float attenuation = 1; Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
+							r += ( light.color.x * attenuation * dot * shadowFactor );
+							g += ( light.color.y * attenuation * dot * shadowFactor );
+							b += ( light.color.z * attenuation * dot * shadowFactor );
+							numLightSourcesHit++;
+							
+							if ( numLightSourcesHit > 1 ) 
 							{
-								final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
-								r += ( light.color.x * attenuation * dot );
-								g += ( light.color.y * attenuation * dot );
-								b += ( light.color.z * attenuation * dot );
-								numLightSourcesHit++;
-							} 
+								r /= 2;
+								g /= 2;
+								b /= 2;
+							}							
 						}
 					}
 					
-					if ( numLightSourcesHit > 1 ) {
-						r /= numLightSourcesHit;
-						g /= numLightSourcesHit;
-						b /= numLightSourcesHit;
-					}
+
 					return Utils.addColors( objColor , r , g ,b );
 					// END: Lighting calculation
 				} 
@@ -834,7 +839,7 @@ public class Main
 			return BACKGROUND_COLOR;
 		}
 
-		private boolean isOccluded(SceneObject hitObject,Vector3 pointOnSurface,Vector3 lightPos,ClosestHit hit) 
+		private float calcShadowFactor(SceneObject hitObject,Vector3 pointOnSurface,Vector3 lightPos,ClosestHit hit) 
 		{
 			// calculate normal vector from point on surface to light position
 			float rayDirX = pointOnSurface.x - lightPos.x;
@@ -846,15 +851,14 @@ public class Main
 			rayDirY /= distToLightSource;
 			rayDirZ /= distToLightSource;
 
-			// I'm marching from the light source to the intersection point and
-			// not the other way around because it's hard to know how far
-			// exactly to move the starting point away from it's original
-			// location so it's clear off the surface that was hit in the first place			
 			float currentPointX = lightPos.x;
 			float currentPointY = lightPos.y;
 			float currentPointZ = lightPos.z;
 
-			float distance=0;
+			final float k = 128f;
+			float res = 1.0f;
+			
+			float distance = 0;
 			for ( float marched = 0 ; marched < distToLightSource ; marched += distance )
 			{
 				if ( PRECOMPUTE ) {
@@ -866,13 +870,19 @@ public class Main
 				if ( distance <= EPSILON ) 
 				{
 					scene.distanceUncached( currentPointX , currentPointY, currentPointZ , hit );
-					return hit.closestObject != hitObject;
+					if ( hit.closestObject != hitObject ) {
+						return 0;
+					}
+					return res;
 				} 
+				
+				res = Math.min( res, k * ( distance / (distToLightSource-marched) ) );
+				
 				currentPointX += rayDirX*distance;
 				currentPointY += rayDirY*distance;
 				currentPointZ += rayDirZ*distance;
 			}
-			return false;
+			return res;
 		}
 
 		private void unproject (Vector3 vec) {
