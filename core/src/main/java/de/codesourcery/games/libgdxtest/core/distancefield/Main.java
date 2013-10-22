@@ -14,13 +14,15 @@ import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.ConvolveOp;
 import java.awt.image.Kernel;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
@@ -34,6 +36,7 @@ import javax.swing.SwingUtilities;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
+import com.sun.org.apache.bcel.internal.generic.SIPUSH;
 
 import de.codesourcery.games.libgdxtest.core.distancefield.Scene.ClosestHit;
 import de.codesourcery.games.libgdxtest.core.distancefield.Scene.DebugRenderer;
@@ -49,14 +52,17 @@ public class Main
 
 	protected static final float MAX_MARCHING_DISTANCE = 150;
 	protected static final float EPSILON = 0.2f;	
-
+	
+	protected static final boolean VISUALIZE_COMPUTATION_TIMES = true;
+	protected static final boolean VISUALIZE_DELTAS = false;
+	
 	protected static final Vector3 TEMP1 = new Vector3();
 	protected static final Vector3 TEMP2 = new Vector3();
 
 	protected static final boolean PRINT_TIMINGS = true;
 	public static final boolean DEBUG_HIT_RATIO = false;	
 	
-	public static final boolean BENCHMARK_MODE = true;
+	public static final boolean BENCHMARK_MODE = false;
 	public static final int BENCHMARK_FRAMECOUNT = 200;
 
 	private static final boolean ANIMATE = true;
@@ -80,8 +86,6 @@ public class Main
 	protected static final char KEY_STRAFE_RIGHT = 'd';
 	protected static final char KEY_UP = 'q';
 	protected static final char KEY_DOWN = 'e';		
-
-	private static final int AMBIENT_COLOR = Color.GRAY.getRGB();
 
 	private static final int BACKGROUND_COLOR = Color.BLACK.getRGB();
 
@@ -110,7 +114,7 @@ public class Main
 		final Vector3 viewDirection = new Vector3( 0.3916041f,-0.061048917f,0.9181042f );
 		
 		scene.add( Scene.pointLight( new Vector3(-10,1,-10) , Color.WHITE ) );
-		// scene.add( Scene.pointLight( new Vector3(70,70,-50) , new Color( 210 , 0 ,0 ) ) );		
+		// scene.add( Scene.pointLight( new Vector3(10,10,-10) , new Color( 210 , 0 ,0 ) ) );		
 
 		final float radius = 1.5f;
 		final SceneObject cube = Scene.cube( new Vector3(0,0,0) , radius );
@@ -133,7 +137,7 @@ public class Main
 //		torus4.setColor( 0x0000ffaa );
 //		scene.add( torus4 );
 
-		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
+		scene.add( Scene.checkerPlane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
 		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
 		scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
 
@@ -515,7 +519,8 @@ public class Main
 			final int imageWidth = CALCULATED_IMAGE_SIZE.width;
 			final int imageHeight = CALCULATED_IMAGE_SIZE.height;
 			
-			final int[] imageData = renderToImage( imageWidth , imageHeight );
+			final List<Slice> slices = new ArrayList<Slice>();
+			final int[] imageData = renderToImage( imageWidth , imageHeight , slices);
 			time3 += System.currentTimeMillis();
 			if ( printDebugInfo ) System.out.println("Actual calculation: "+time3+" ms");
 			
@@ -526,6 +531,10 @@ public class Main
 				time4 += System.currentTimeMillis();
 				
 				if ( printDebugInfo )  System.out.println("converting pixel array to image: "+time4+" ms");
+				
+				if ( VISUALIZE_COMPUTATION_TIMES ) {
+					visualizeComputationTime(slices,backgroundImage.getGraphics());
+				}
 				
 				// graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
 				// graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
@@ -609,8 +618,49 @@ public class Main
 				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms , "+frames+" frames)");
 			}			
 		}
+		
+		private void visualizeComputationTime(List<Slice> slices,Graphics bgGraphics) 
+		{
+			long totalTime = 0;
+			for ( Slice s : slices ) {
+				totalTime += s.renderTimeMillis;
+			}
+			float avg = totalTime / (float) slices.size();
+			
+			float maxDeviation = 0;
+			for ( Slice s : slices ) {
+				maxDeviation = Math.max( maxDeviation , Math.abs( s.renderTimeMillis - avg ) );
+			}			
+			
+			for ( Slice s : slices ) 
+			{
+				float factor;
+				if ( VISUALIZE_DELTAS) {
+					float deltaFromAvg = Math.abs( s.renderTimeMillis - avg );
+					factor = deltaFromAvg / maxDeviation;
+				} else {
+					factor = 20*(s.renderTimeMillis/(float)totalTime);
+				}
+				int color = (int) (255*factor);
+				if ( color > 255 ) {
+					color = 255;
+				}
+				bgGraphics.setColor( new Color( color , 0 , 0 , 150 ) );
+				bgGraphics.fillRect( s.xStart , s.yStart , s.xEnd - s.xStart , s.yEnd - s.yStart );
+				
+				bgGraphics.setColor( Color.BLACK );
+				bgGraphics.drawRect( s.xStart , s.yStart , s.xEnd - s.xStart , s.yEnd - s.yStart );			
+				
+				int centerX = (s.xEnd + s.xStart)/2;
+				int centerY = (s.yEnd + s.yStart)/2;
+				
+				final String txt = Long.toString( s.renderTimeMillis );
+				Rectangle2D bounds = bgGraphics.getFontMetrics().getStringBounds( txt , bgGraphics );
+				bgGraphics.drawString( txt , (int) Math.round( centerX - bounds.getWidth()/2.0f ) , (int) Math.round( centerY+ bgGraphics.getFontMetrics().getDescent()) );
+			}				
+		}
 
-		private int[] renderToImage(final int width,final int height) 
+		private int[] renderToImage(final int width,final int height,final List<Slice> slices) 
 		{
 			if ( imageData == null || imageData.length != (width*height) ) {
 				imageData = new int[ width*height ];
@@ -618,7 +668,7 @@ public class Main
 				System.out.println("Allocated image data.");
 			} 
 
-			final CountDownLatch latch = new CountDownLatch( SLICE_COUNT*SLICE_COUNT );
+			final AtomicInteger latch = new AtomicInteger();
 			int xStep = width / SLICE_COUNT;
 			int yStep = width / SLICE_COUNT;			
 			for ( int x = 0 ; x < width ; x+=xStep) 
@@ -629,29 +679,48 @@ public class Main
 				{
 					final int y1 = y;
 					final int y2 =  (y1+yStep) >= height ? height :  y1 + yStep;
+					latch.incrementAndGet();
 					threadPool.execute( new Runnable() {
 						@Override
 						public void run() 
 						{
+							long time = VISUALIZE_COMPUTATION_TIMES ? System.currentTimeMillis() : 0;
 							try {
 								// xStart , yStart , xEnd , yEnd 
 								renderImageRegion( x1 , y1 , x2, y2 , imageData , width , height );
 							} catch(Exception e) {
 								e.printStackTrace();
-							} finally {
-								latch.countDown();
+							} 
+							finally 
+							{
+								if ( VISUALIZE_COMPUTATION_TIMES ) 
+								{
+									time = System.currentTimeMillis() - time;
+									synchronized(slices) {
+										slices.add( new Slice( x1,y1,x2,y2,time ) );
+									}
+								}
+								synchronized(latch) {
+									latch.decrementAndGet();
+									latch.notifyAll();
+								}
 							}
 						}
 					});
 				}
 			}
 
-			try 
+			while( true ) 
 			{
-				latch.await();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
+				synchronized(latch) 
+				{
+					if ( latch.get() == 0 ) {
+						break;
+					}
+					try {
+						latch.wait();
+					} catch (InterruptedException e) { /* ok */ }
+				}
 			}
 
 			if ( ! RENDER_TO_SCREEN ) {
@@ -659,7 +728,25 @@ public class Main
 			}
 			return imageData;
 		}
-
+		
+		protected static final class Slice {
+			
+			public int xStart;
+			public int yStart;
+			public int xEnd;
+			public int yEnd;
+			public long renderTimeMillis;
+			
+			public Slice(int xStart, int yStart, int xEnd, int yEnd,long renderTimeMillis) 
+			{
+				this.xStart = xStart;
+				this.yStart = yStart;
+				this.xEnd = xEnd;
+				this.yEnd = yEnd;
+				this.renderTimeMillis = renderTimeMillis;
+			}
+		}
+		
 		private void renderImageRegion(int xStart,int yStart,int xEnd,int yEnd,int[] imageData,int imageWidth,int imageHeight) 
 		{
 			final Vector3 currentPoint = new Vector3();
@@ -669,14 +756,12 @@ public class Main
 			final ClosestHit hit = new ClosestHit();
 			final TraceResult traceResult = new TraceResult();
 
-			int y = yStart;
-			boolean yBoundardNotReached = (y+1) < yEnd;
-			while( yBoundardNotReached ) 
+			for ( int y = yStart ; y < yEnd ; y+= 2) 
 			{
-				int x = xStart;
-				boolean xBoundardNotReached = (x+1) < xEnd;
-				while ( xBoundardNotReached )
+				boolean yBoundardNotReached = (y+1) < yEnd;
+				for ( int x = xStart ; x < xEnd ; x+= 2)
 				{
+					boolean xBoundardNotReached = (x+1) < xEnd;
 					// trace ray #1
 					currentPoint.set(x,y,0);
 					unproject(currentPoint);
@@ -684,7 +769,7 @@ public class Main
 
 					imageData[ x + y * imageWidth ]  = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 					final float jumpDistance;
-					if ( traceResult.minDistance > EPSILON  ) {
+					if ( traceResult.minDistance > EPSILON*2  ) {
 						jumpDistance = traceResult.distanceMarched*0.99f; 
 					} else {
 						jumpDistance = 0;
@@ -741,11 +826,7 @@ public class Main
 						
 						imageData[ x + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
 					}
-					x+=2;
-					xBoundardNotReached = (x+1) < xEnd;
 				}
-				y += 2;
-				yBoundardNotReached = (y+1) < yEnd;
 			}
 		}
 		
