@@ -59,11 +59,9 @@ public class Main
 
 	private static final boolean ANIMATE = true;
 	
-	protected static boolean ENABLE_LIGHTING = true;
-	protected static boolean ENABLE_SHADOWS = true;
 	protected static boolean RENDER_TO_SCREEN = true;
 
-	protected final static boolean PRECOMPUTE = true;
+	protected final static boolean PRECOMPUTE = false;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
 	protected static final int SLICE_COUNT = (int) CPU_COUNT*2;
@@ -73,8 +71,6 @@ public class Main
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
 	protected static final char KEY_TOGGLE_SMOOTH_BLEND = 'b';
 	protected static final char KEY_TOGGLE_LERP = 'x';			
-	protected static final char KEY_TOGGLE_OCCLUSION = 'o';	
-	protected static final char KEY_TOGGLE_LIGHTING = 'l';	
 	protected static final char KEY_TOGGLE_MOUSELOOK = 27;
 	protected static final char KEY_FORWARD = 'w';
 	protected static final char KEY_BACKWARD = 's';		
@@ -327,18 +323,6 @@ public class Main
 					case KEY_TOGGLE_RENDERING:
 						RENDER_TO_SCREEN = ! RENDER_TO_SCREEN;
 						System.out.println("render to screen: "+RENDER_TO_SCREEN );
-						resetFpsCounter();
-						break;
-					case KEY_TOGGLE_LIGHTING:
-						ENABLE_LIGHTING = ! ENABLE_LIGHTING;
-						System.out.println("lighting: "+ENABLE_LIGHTING);
-						resetFpsCounter();
-						break;
-					case KEY_TOGGLE_OCCLUSION:
-						if ( ENABLE_LIGHTING ) {
-							ENABLE_SHADOWS = ! ENABLE_SHADOWS;
-							System.out.println("shadows: "+ENABLE_SHADOWS);
-						}
 						resetFpsCounter();
 						break;
 					case KEY_FORWARD:
@@ -770,7 +754,7 @@ public class Main
 		{
 			float marched = 0;
 			float minDistance = Float.MAX_VALUE;
-			while ( marched < MAX_MARCHING_DISTANCE )
+			do
 			{
 				float distance;
 				if ( PRECOMPUTE ) {
@@ -783,11 +767,6 @@ public class Main
 				{
 					result.distanceMarched = marched;
 					result.minDistance = minDistance;
-					
-					if ( ! ENABLE_LIGHTING ) 
-					{
-						return AMBIENT_COLOR;	
-					}
 					
 					// ===== BEGIN: Lighting calculation =====
 					if ( PRECOMPUTE ) {
@@ -819,7 +798,7 @@ public class Main
 						float dot = normal.x*lvx + normal.y*lvy + normal.z * lvz;
 						if ( dot > 0 ) 
 						{
-							if ( ! ENABLE_SHADOWS || ! isOccluded( hitObject , pointOnRay , light.position , hit ) ) 
+							if ( ! isOccluded( hitObject , pointOnRay , light.position , hit ) ) 
 							{
 								final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
 								r += ( light.color.x * attenuation * dot );
@@ -848,7 +827,7 @@ public class Main
 				pointOnRay.x += rayDir.x*distance;
 				pointOnRay.y += rayDir.y*distance;
 				pointOnRay.z += rayDir.z*distance;
-			}
+			} while ( marched < MAX_MARCHING_DISTANCE );
 
 			result.minDistance = minDistance;
 			result.distanceMarched = marched;

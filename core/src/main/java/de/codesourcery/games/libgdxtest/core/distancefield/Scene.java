@@ -83,7 +83,7 @@ public final class Scene {
 		
 		private final int elements;
 		
-		private final CellEntry[] cells;
+		private final CellEntry[][][] cells;
 		
 		private final float cellSize;
 		private final float halfCellSize;
@@ -116,13 +116,17 @@ public final class Scene {
 			this.maxY = centerY + (extend/2.0f);
 			this.maxZ = centerZ + (extend/2.0f);			
 			
-			final int len = elements*elements*elements;
-			this.cells = new CellEntry[ len ];
-			
-			for ( int i = 0 ; i < len ; i++ ) 
-			{
-				cells[ i ] = new CellEntry(0);
+			final CellEntry[][][] array = new CellEntry[ elements ][][] ;
+			for ( int x = 0 ; x < elements ; x++ ) {
+				array[x] = new CellEntry[elements][];
+				for ( int y = 0 ; y < elements ; y++ ) {
+					array[x][y] = new CellEntry[elements];
+					for ( int z = 0 ; z < elements ; z++ ) {
+						array[x][y][z] = new CellEntry(0);
+					}
+				}
 			}
+			this.cells = array;
 			update( pool,cpuCount , subdivide );
 		}
 		
@@ -171,7 +175,7 @@ public final class Scene {
 					{
 						float cz = minZ + halfCellSize + z*cellSize;
 						float d = distanceUncached( cx , cy , cz );
-						final CellEntry entry = cells[ x + y*elements + z*elements*elements ];
+						final CellEntry entry = cells[x][y][z];
 						if ( subdivide && Math.abs( d ) <= SUBDIVIDE_DISTANCE ) 
 						{
 							if ( entry.details != null ) 
@@ -206,7 +210,7 @@ public final class Scene {
 			if ( Main.DEBUG_HIT_RATIO )  hits++;
 			
 			try {
-				CellEntry cell = cells[ix+iy*elements+iz*elements*elements];
+				CellEntry cell = cells[ix][iy][iz];
 				if ( cell.gotDetails ) {
 					 return cell.details.secondLevelDistance( px,py,pz);
 				}
@@ -229,7 +233,7 @@ public final class Scene {
 			int iz = (int) ( ( pz - minZ ) / cellSize );
 			
 			try {
-				return cells[ix+iy*elements+iz*elements*elements].value;
+				return cells[ix][iy][iz].value;
 			} 
 			catch(ArrayIndexOutOfBoundsException e) 
 			{
@@ -263,10 +267,14 @@ public final class Scene {
 			
 			renderer.setColor( blueAlpha );
 			
-			for ( int i = 0 ; i < cells.length ; i++ ) {
-				CellEntry cell = cells[i];
-				if ( cell.gotDetails ) {
-					cell.details.renderOutline( renderer );
+			for ( int x = 0 ; x < elements ; x++ ) {
+				for ( int y = 0 ; y < elements ; y++ ) {
+					for ( int z = 0 ; z < elements ; z++ ) {
+						CellEntry cell = cells[x][y][z];
+						if ( cell.gotDetails ) {
+							cell.details.renderOutline( renderer );
+						}
+					}
 				}
 			}
 		}
