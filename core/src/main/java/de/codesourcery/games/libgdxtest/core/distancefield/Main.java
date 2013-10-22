@@ -782,7 +782,6 @@ public class Main
 
 					scene.populateNormal( pointOnRay , normal ); // calculate normal
 
-					int numLightSourcesHit = 0;
 					int r = 0;
 					int g = 0;
 					int b = 0;
@@ -803,22 +802,15 @@ public class Main
 						if ( dot > 0 ) 
 						{
 							float shadowFactor = calcShadowFactor( hitObject , pointOnRay , light.position , hit );
-							final float attenuation = 1; Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
+							final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
 							r += ( light.color.x * attenuation * dot * shadowFactor );
 							g += ( light.color.y * attenuation * dot * shadowFactor );
 							b += ( light.color.z * attenuation * dot * shadowFactor );
-							numLightSourcesHit++;
-							
-							if ( numLightSourcesHit > 1 ) 
-							{
-								r /= 2;
-								g /= 2;
-								b /= 2;
-							}							
+							r /= 2;
+							g /= 2;
+							b /= 2;
 						}
 					}
-					
-
 					return Utils.addColors( objColor , r , g ,b );
 					// END: Lighting calculation
 				} 
@@ -855,8 +847,8 @@ public class Main
 			float currentPointY = lightPos.y;
 			float currentPointZ = lightPos.z;
 
-			final float k = 128f;
-			float res = 1.0f;
+			final float k = 100f;
+			float shadowFactor = 1.0f;
 			
 			float distance = 0;
 			for ( float marched = 0 ; marched < distToLightSource ; marched += distance )
@@ -873,16 +865,16 @@ public class Main
 					if ( hit.closestObject != hitObject ) {
 						return 0;
 					}
-					return res;
+					return shadowFactor;
 				} 
 				
-				res = Math.min( res, k * ( distance / (distToLightSource-marched) ) );
+				shadowFactor = Math.min( shadowFactor, k * ( distance / (distToLightSource-marched) ) );
 				
 				currentPointX += rayDirX*distance;
 				currentPointY += rayDirY*distance;
 				currentPointZ += rayDirZ*distance;
 			}
-			return res;
+			return shadowFactor;
 		}
 
 		private void unproject (Vector3 vec) {
