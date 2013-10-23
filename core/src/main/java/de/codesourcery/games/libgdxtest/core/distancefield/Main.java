@@ -50,7 +50,7 @@ public class Main
 	protected static final boolean PRINT_TIMINGS = false;
 	public static final boolean DEBUG_HIT_RATIO = false;	
 
-	public static final boolean BENCHMARK_MODE = true;
+	public static final boolean BENCHMARK_MODE = false;
 
 	public static final int BENCHMARK_WARMUP_FRAMECOUNT = 400;
 	public static final int BENCHMARK_FRAMECOUNT = 100;
@@ -811,7 +811,7 @@ public class Main
 			float minDistance = Float.MAX_VALUE;
 			do
 			{
-				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
+				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z );
 
 				if ( distance <= EPSILON ) 
 				{
@@ -842,7 +842,7 @@ public class Main
 			float marched = 0;
 			do
 			{
-				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
+				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z );
 
 				if ( distance <= EPSILON ) 
 				{
@@ -860,7 +860,7 @@ public class Main
 		private int shade(Vector3 pointOnRay, Vector3 normal, ClosestHit hit) 
 		{
 			final SceneObject hitObject = hit.closestObject;
-			final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
+			final int objColor = scene.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
 
 			scene.populateNormal( pointOnRay , normal ); 
 
@@ -926,11 +926,8 @@ public class Main
 
 				if ( distance <= EPSILON ) 
 				{
-					scene.distance( currentPointX , currentPointY, currentPointZ , hit );
-					if ( hit.closestObject != hitObject ) {
-						return 0;
-					}
-					return shadowFactor*k;
+					scene.distance( currentPointX , currentPointY, currentPointZ );
+					return 0;
 				} 
 
 				final float newFactor = ( distance / (distToLightSource-marched) );

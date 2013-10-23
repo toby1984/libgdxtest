@@ -1,9 +1,10 @@
 package de.codesourcery.games.libgdxtest.core.distancefield;
 
 import java.awt.Color;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.badlogic.gdx.math.Vector3;
+
+import de.codesourcery.games.libgdxtest.core.world.SimplexNoise;
 
 public final class Scene {
 
@@ -12,9 +13,52 @@ public final class Scene {
 	
 	private final float normalCalcDelta;
 	
+	private static final int HEIGHTMAP_ELEMENTS = 32;
+	
+	private static final float HEIGHTMAP_SCALE = 20f;
+	
+	private static final float HEIGHTMAP_EXTEND = 60;
+	private static final Vector3 HEIGHTMAP_CENTER = new Vector3(0,0,0);
+	private static final float CELL_SIZE = HEIGHTMAP_EXTEND / (float) HEIGHTMAP_ELEMENTS;
+	
+	private final float[] heightMap;
+	
 	public Scene() 
 	{
 		normalCalcDelta = 0.1f;
+		SimplexNoise noise = new SimplexNoise( 0xdeadbeef );
+		heightMap = noise.createHeightMap( 0 , 0 , HEIGHTMAP_ELEMENTS , CELL_SIZE , 6 , 0.5f );
+		
+		final int len =HEIGHTMAP_ELEMENTS*HEIGHTMAP_ELEMENTS;
+		float max = Float.MIN_VALUE;
+		float min = Float.MAX_VALUE;
+		for ( int i = 0 ; i < len ; i++ ) {
+			float h = heightMap[i];
+			if ( h > max ) {
+				max = h;
+			}
+			if ( h < min ) {
+				min = h;
+			}
+		}
+		
+		float scale = 1.0f/(max-min);
+		for ( int i = 0 ; i < len ; i++ ) {
+			heightMap[i] = HEIGHTMAP_SCALE * ( (heightMap[i]-min)*scale );
+		}
+		
+		max = Float.MIN_VALUE;
+		min = Float.MAX_VALUE;
+		for ( int i = 0 ; i < len ; i++ ) {
+			float h = heightMap[i];
+			if ( h > max ) {
+				max = h;
+			}
+			if ( h < min ) {
+				min = h;
+			}
+		}	
+		System.out.println("SCALED max: "+max+"/min:"+min);
 	}
 	
 	public static SceneObject sphere(Vector3 center,float radius) {
@@ -89,46 +133,37 @@ public final class Scene {
 	    return Utils.lerp( b, a, h ) - k*h*(1.5f-h);
 	}	
 	
+	public int getColor(float px,float py,float pz) {
+		int x = (int) ((px - HEIGHTMAP_CENTER.x) / CELL_SIZE);
+		int z = (int) ((pz - HEIGHTMAP_CENTER.z) / CELL_SIZE);
+		
+		if ( x > 0 && x < HEIGHTMAP_ELEMENTS && z > 0 && z < HEIGHTMAP_ELEMENTS ) {
+			float factor = heightMap[x+z*HEIGHTMAP_ELEMENTS] / HEIGHTMAP_SCALE;
+			return (int) (factor*255);
+		}
+		return 0;
+	}
+	
 	public float distance(float px,float py,float pz) 
 	{
-		float distance = objects[0].distance( px,py,pz );
-		final int len = objects.length;
-		for ( int i = 1 ; i < len ; i++) 
-		{
-			final SceneObject obj=objects[i];
-			final float d = obj.distance( px,py,pz);
-			if ( obj.smoothBlend ) {
-				distance = smoothMin( distance , d );
-			} else if ( d < distance ) {
-				distance = d;
-			}
+		float dx = (px - HEIGHTMAP_CENTER.x);
+		float dy = (py - HEIGHTMAP_CENTER.y);
+		float dz = pz - HEIGHTMAP_CENTER.z;
+		
+		float distToCenter = (float) Math.sqrt( dx*dx+dy*dy+dz*dz);
+		if ( distToCenter > Math.sqrt( HEIGHTMAP_EXTEND + HEIGHTMAP_EXTEND ) ) {
+			return distToCenter - (float) Math.sqrt( HEIGHTMAP_EXTEND + HEIGHTMAP_EXTEND );
 		}
-		return distance;
-	}	
-	
-	public float distance(float px,float py,float pz,ClosestHit hit) 
-	{
-		SceneObject closest = objects[0];
-		float distance = closest.distance( px,py,pz );
-		final int len = objects.length;
-		for ( int i = 1 ; i < len ; i++) 
-		{
-			final SceneObject obj=objects[i];
-			final float d = obj.distance( px,py,pz);
-			if ( obj.smoothBlend ) 
-			{
-				if ( d < distance ) {
-					closest = obj;
-				}					
-				distance = smoothMin( distance , d );
-			} else if ( d < distance ) {
-				distance = d;
-				closest = obj;
-			}
+		
+		int x = (int) ( dx / CELL_SIZE);
+		int z = (int) (dz / CELL_SIZE);
+		
+		if ( x > 0 && x < HEIGHTMAP_ELEMENTS && z > 0 && z < HEIGHTMAP_ELEMENTS ) {
+			float height = heightMap[x+z*HEIGHTMAP_ELEMENTS];
+			return py - height;
 		}
-		hit.closestObject = closest;
-		return distance;
-	}	
+		return 100;
+	}
 	
 	public void populateNormal(Vector3 p,Vector3 normalVector) 
 	{
