@@ -71,7 +71,7 @@ public class Main
 	 * 5x5 => 5.37
 	 * 6x6 => 5.46
 	 * 6x7 => 5.34
-	 * 7x6 => 5.81 (*)
+	 * 7x6 => 5.78 (*)
 	 * 7x7 => 5.34
 	 */
 	protected static final int SLICES_HORIZONTAL = 7;
@@ -892,7 +892,7 @@ public class Main
 				if ( dot > 0 ) 
 				{
 					float shadowFactor = calcShadowFactor( hitObject , pointOnRay , light.position , hit );
-					final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
+					float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f );
 					r += ( light.color.x * attenuation * dot * shadowFactor );
 					g += ( light.color.y * attenuation * dot * shadowFactor );
 					b += ( light.color.z * attenuation * dot * shadowFactor );
@@ -924,7 +924,7 @@ public class Main
 			float currentPointZ = lightPos.z;
 
 			final float k = 100f;
-			float shadowFactor = 1.0f;
+			float shadowFactor = 1.0f/k;
 
 			float distance = 0;
 			for ( float marched = 0 ; marched < distToLightSource ; marched += distance )
@@ -937,10 +937,10 @@ public class Main
 					if ( hit.closestObject != hitObject ) {
 						return 0;
 					}
-					return shadowFactor;
+					return shadowFactor*k;
 				} 
 
-				final float newFactor = k * ( distance / (distToLightSource-marched) );
+				final float newFactor = ( distance / (distToLightSource-marched) );
 				if ( newFactor < shadowFactor ) {
 					shadowFactor = newFactor; // shadowFactor = Math.min( shadowFactor, newFactor );
 				}
@@ -949,7 +949,7 @@ public class Main
 				currentPointY += rayDirY*distance;
 				currentPointZ += rayDirZ*distance;
 			}
-			return shadowFactor;
+			return shadowFactor*k;
 		}
 
 		private void unproject (Vector3 vec) {
