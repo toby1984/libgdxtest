@@ -41,8 +41,6 @@ public class Main
 	protected static final Dimension CALCULATED_IMAGE_SIZE = new Dimension(512,512);
 	protected static final Dimension INITIAL_WINDOW_SIZE = new Dimension(640,480);
 
-	protected static boolean RENDER_DISTANCE_FIELD = false;
-
 	protected static final float MAX_MARCHING_DISTANCE = 150;
 	public static final float EPSILON = 0.2f;	
 
@@ -78,7 +76,6 @@ public class Main
 	protected static final int SLICES_VERTICAL = 6;
 
 	protected static final char KEY_PRING_CAMERA = 'p';	
-	protected static final char KEY_TOGGLE_SHOW_DISTANCE_FIELD = 'f';		
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
 	protected static final char KEY_TOGGLE_SMOOTH_BLEND = 'b';
 	protected static final char KEY_TOGGLE_MOUSELOOK = 27;
@@ -308,10 +305,6 @@ public class Main
 				float velocity = 1f;
 				switch( e.getKeyChar() ) 
 				{
-					case KEY_TOGGLE_SHOW_DISTANCE_FIELD:
-						RENDER_DISTANCE_FIELD = ! RENDER_DISTANCE_FIELD;
-						resetFpsCounter();
-						break;
 					case KEY_PRING_CAMERA:
 						System.out.println( "new Vector3"+Main.toStringLong(cam.position)+","+
 								"new Vector3"+Main.toStringLong(cam.direction) );
