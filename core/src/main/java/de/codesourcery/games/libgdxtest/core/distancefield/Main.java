@@ -7,7 +7,6 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Image;
 import java.awt.MouseInfo;
 import java.awt.Point;
 import java.awt.Toolkit;
@@ -16,8 +15,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
-import java.awt.image.ConvolveOp;
-import java.awt.image.Kernel;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,7 +71,7 @@ public class Main
 	 * 5x5 => 5.37
 	 * 6x6 => 5.46
 	 * 6x7 => 5.34
-	 * 7x6 => 5.61 (*)
+	 * 7x6 => 5.71 (*)
 	 * 7x7 => 5.34
 	 */
 	protected static final int SLICES_HORIZONTAL = 7;
@@ -84,7 +81,6 @@ public class Main
 	protected static final char KEY_TOGGLE_SHOW_DISTANCE_FIELD = 'f';		
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
 	protected static final char KEY_TOGGLE_SMOOTH_BLEND = 'b';
-	protected static final char KEY_TOGGLE_LERP = 'x';			
 	protected static final char KEY_TOGGLE_MOUSELOOK = 27;
 	protected static final char KEY_FORWARD = 'w';
 	protected static final char KEY_BACKWARD = 's';		
@@ -333,11 +329,6 @@ public class Main
 						}
 						resetFpsCounter();
 						break;
-					case KEY_TOGGLE_LERP:
-						scene.setLerp( ! scene.isLerp() );
-						System.out.println("linear interpolation: "+scene.isLerp());
-						resetFpsCounter();
-						break;
 					case KEY_TOGGLE_RENDERING:
 						RENDER_TO_SCREEN = ! RENDER_TO_SCREEN;
 						System.out.println("render to screen: "+RENDER_TO_SCREEN );
@@ -473,21 +464,6 @@ public class Main
 				this.frameCounter = 0;
 				this.totalFrameTime = 0;
 			}
-		}
-
-		public Image blur(Image image)
-		{
-			final BufferedImage biSrc = new BufferedImage(image.getWidth(null),image.getHeight(null) , BufferedImage.TYPE_INT_RGB); 
-			Graphics2D graphics = biSrc.createGraphics();
-			graphics.drawImage( image , 0 , 0 , null );
-
-			float data[] = { 0.0625f, 0.125f, 0.0625f, 0.125f, 0.25f, 0.125f, 0.0625f, 0.125f, 0.0625f };
-			Kernel kernel = new Kernel(3, 3, data);
-			ConvolveOp convolve = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP,
-					null);
-			BufferedImage biDest = new BufferedImage( biSrc.getWidth() , biSrc.getHeight() , biSrc.getType() );
-			convolve.filter(biSrc, biDest);
-			return biDest;
 		}
 
 		@Override
@@ -727,11 +703,20 @@ public class Main
 					// trace ray #1
 					currentPoint.set(x,y,0);
 					unproject(currentPoint);
-					rayDir.set(currentPoint).sub(cam.position).nor();
-
+					
+					rayDir.x = currentPoint.x - cam.position.x;
+					rayDir.y = currentPoint.y - cam.position.y;
+					rayDir.z = currentPoint.z - cam.position.z;
+					rayDir.nor();
+					
 					imageData[ x + y * imageWidth ]  = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+					
+					// advance starting point for other rays
+					// in bundle if minimum distance during ray marching
+					// never got below a certain threshold
+					// TODO: The threshold should actually depend on the distance marched
 					final float jumpDistance;
-					if ( traceResult.minDistance > EPSILON*2  ) {
+					if ( traceResult.minDistance > EPSILON*2 ) {
 						jumpDistance = traceResult.distanceMarched*0.99f; 
 					} else {
 						jumpDistance = 0;
@@ -742,7 +727,10 @@ public class Main
 						// trace ray #2
 						currentPoint.set(x+1,y,0);
 						unproject(currentPoint);
-						rayDir.set(currentPoint).sub(cam.position).nor();
+						rayDir.x = currentPoint.x - cam.position.x;
+						rayDir.y = currentPoint.y - cam.position.y;
+						rayDir.z = currentPoint.z - cam.position.z;
+						rayDir.nor();
 						
 						currentPoint.x += rayDir.x*jumpDistance;
 						currentPoint.y += rayDir.y*jumpDistance;
@@ -755,7 +743,11 @@ public class Main
 							// trace #ray #3
 							currentPoint.set(x,y+1,0);
 							unproject(currentPoint);
-							rayDir.set(currentPoint).sub(cam.position).nor();
+							
+							rayDir.x = currentPoint.x - cam.position.x;
+							rayDir.y = currentPoint.y - cam.position.y;
+							rayDir.z = currentPoint.z - cam.position.z;
+							rayDir.nor();
 							
 							currentPoint.x += rayDir.x*jumpDistance;
 							currentPoint.y += rayDir.y*jumpDistance;
@@ -766,7 +758,10 @@ public class Main
 							// ray #4
 							currentPoint.set(x+1,y+1,0);
 							unproject(currentPoint);
-							rayDir.set(currentPoint).sub(cam.position).nor();
+							rayDir.x = currentPoint.x - cam.position.x;
+							rayDir.y = currentPoint.y - cam.position.y;
+							rayDir.z = currentPoint.z - cam.position.z;
+							rayDir.nor();							
 							
 							currentPoint.x += rayDir.x*jumpDistance;
 							currentPoint.y += rayDir.y*jumpDistance;
@@ -780,7 +775,10 @@ public class Main
 						// trace #ray #3
 						currentPoint.set(x,y+1,0);
 						unproject(currentPoint);
-						rayDir.set(currentPoint).sub(cam.position).nor();
+						rayDir.x = currentPoint.x - cam.position.x;
+						rayDir.y = currentPoint.y - cam.position.y;
+						rayDir.z = currentPoint.z - cam.position.z;
+						rayDir.nor();
 						
 						currentPoint.x += rayDir.x*jumpDistance;
 						currentPoint.y += rayDir.y*jumpDistance;

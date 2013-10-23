@@ -12,8 +12,6 @@ public final class Scene {
 	
 	private final float normalCalcDelta;
 	
-	private boolean lerp = false;
-	
 	private final AtomicBoolean sceneHasChanged = new AtomicBoolean(true);
 	
 	public Scene() 
@@ -36,14 +34,6 @@ public final class Scene {
 	
 	public void clearSceneChanged() {
 		sceneHasChanged.set(false);
-	}
-	
-	public void setLerp(boolean yesNo) {
-		this.lerp = yesNo;
-	}
-	
-	public boolean isLerp() {
-		return lerp;
 	}
 	
 	public static SceneObject torus(Vector3 center,float rInner,float rOuter) {
