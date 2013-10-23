@@ -75,6 +75,24 @@
 							<target>
 								<java fork="true" classname="${mainClass}" classpathref="maven.test.classpath">
 									<sysproperty key="java.library.path" value="target/natives"/>
+<!--
+                                                                        <jvmarg value="-server" />
+                                                                        <jvmarg value="-XX:+UnlockExperimentalVMOptions" />
+                                                                        <jvmarg value="-XX:+PrintCompilation" />
+                                                                        <jvmarg value="-XX:-UseLargePages" />
+                                                                        <jvmarg value="-XX:+AggressiveOpts" />
+                                                                        <jvmarg value="-XX:CompileThreshold=1500" />
+-->
+                                                                        <!-- <jvmarg value="-server"/> -->
+                                                                        <!-- <jvmarg value="-XX:+UseFastAccessorMethods "/> -->
+                                                                        <!-- <jvmarg value="-XX:+UseCompressedOops" /> -->
+                                                                        <!-- <jvmarg>-XX:InlineSmallCode=n</jvmarg> -->
+                                                                        <!-- <jvmarg value="-XX:MaxInlineSize=200" /> -->
+                                                                        <!-- jvmarg value="-XX:FreqInlineSize=200" /> -->
+                                                                        <!-- <jvmarg>-XX:FreqInlineSize=n</jvmarg> --> 
+                                                                        <!-- <jvmarg>-XX:LoopUnrollLimit=n</jvmarg> -->
+                                                                        <!-- <jvmarg value="-XX:+UseBiasedLocking" /> -->
+                                                                        <!-- <jvmarg></jvmarg> -->
 								</java>
 							</target>
 						</configuration>

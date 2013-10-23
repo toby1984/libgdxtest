@@ -36,44 +36,50 @@ import javax.swing.SwingUtilities;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
-import com.sun.org.apache.bcel.internal.generic.SIPUSH;
 
 import de.codesourcery.games.libgdxtest.core.distancefield.Scene.ClosestHit;
-import de.codesourcery.games.libgdxtest.core.distancefield.Scene.DebugRenderer;
 
 public class Main 
 {
 	protected static final Dimension CALCULATED_IMAGE_SIZE = new Dimension(512,512);
 	protected static final Dimension INITIAL_WINDOW_SIZE = new Dimension(640,480);
 
-	protected static final int MAX_STEPS = 81;
-	
 	protected static boolean RENDER_DISTANCE_FIELD = false;
 
 	protected static final float MAX_MARCHING_DISTANCE = 150;
-	protected static final float EPSILON = 0.2f;	
+	public static final float EPSILON = 0.2f;	
 	
-	protected static final boolean VISUALIZE_COMPUTATION_TIMES = true;
+	protected static final boolean VISUALIZE_COMPUTATION_TIMES = false;
 	protected static final boolean VISUALIZE_DELTAS = false;
 	
-	protected static final Vector3 TEMP1 = new Vector3();
-	protected static final Vector3 TEMP2 = new Vector3();
-
-	protected static final boolean PRINT_TIMINGS = true;
+	protected static final boolean PRINT_TIMINGS = false;
 	public static final boolean DEBUG_HIT_RATIO = false;	
 	
-	public static final boolean BENCHMARK_MODE = false;
-	public static final int BENCHMARK_FRAMECOUNT = 200;
+	public static final boolean BENCHMARK_MODE = true;
+	
+	public static final int BENCHMARK_WARMUP_FRAMECOUNT = 400;
+	public static final int BENCHMARK_FRAMECOUNT = 100;
 
 	private static final boolean ANIMATE = true;
 	
 	protected static boolean RENDER_TO_SCREEN = true;
 
-	protected final static boolean PRECOMPUTE = false;
-
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
-	protected static final int SLICE_COUNT = (int) CPU_COUNT*2;
-
+	
+	/*
+	 * i5-2500K FPS:
+	 * 
+	 * 3x3 => 4.83
+	 * 4x4 => 5.10
+	 * 5x5 => 5.37
+	 * 6x6 => 5.46
+	 * 6x7 => 5.34
+	 * 7x6 => 5.61 (*)
+	 * 7x7 => 5.34
+	 */
+	protected static final int SLICES_HORIZONTAL = 7;
+	protected static final int SLICES_VERTICAL = 6;
+	
 	protected static final char KEY_PRING_CAMERA = 'p';	
 	protected static final char KEY_TOGGLE_SHOW_DISTANCE_FIELD = 'f';		
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
@@ -98,6 +104,9 @@ public class Main
 
 	public static void main(String[] args) {
 
+		if ( BENCHMARK_MODE ) {
+			System.out.println("Will start benchmark measurements after "+BENCHMARK_WARMUP_FRAMECOUNT+" frames.");
+		}
 		final JFrame frame = new JFrame("distancefield");
 		frame.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
 
@@ -108,7 +117,7 @@ public class Main
 		cnstrs.weighty=1.0;
 		cnstrs.fill = GridBagConstraints.BOTH;
 
-		final Scene scene= new Scene( PRECOMPUTE );
+		final Scene scene= new Scene();
 
 		final Vector3 eyePosition = new Vector3( -9.672026f,5.9259033f,-31.723171f );
 		final Vector3 viewDirection = new Vector3( 0.3916041f,-0.061048917f,0.9181042f );
@@ -137,7 +146,7 @@ public class Main
 //		torus4.setColor( 0x0000ffaa );
 //		scene.add( torus4 );
 
-		scene.add( Scene.checkerPlane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
+		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
 		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
 		scene.add( Scene.plane( new Vector3(0,0,50) , new Vector3(0,0,-1) ).setColor( 0xffffff ) );		
 
@@ -284,6 +293,9 @@ public class Main
 		// @GuardedBy(FPS_COUNTER_LOCK)
 		private long totalFrameTime = 0;
 		
+		// @GuardedBy(FPS_COUNTER_LOCK)
+		private boolean measurementStarted = false;		
+		
 		private final float viewportWidth;
 		private final float viewportHeight;
 
@@ -363,6 +375,7 @@ public class Main
 
 		private final MouseAdapter mouseAdapter = new MouseAdapter() {
 
+			private final Vector3 TEMP2 = new Vector3();
 			private final float degreesPerPixel = 0.1f;
 			private int lastX = 0;
 			private int lastY = 0;
@@ -452,13 +465,6 @@ public class Main
 				}
 			};
 			threadPool = new ThreadPoolExecutor( CPU_COUNT , CPU_COUNT , 60 , TimeUnit.MINUTES, queue , threadFactory , new CallerRunsPolicy() );
-
-			if ( PRECOMPUTE ) 
-			{
-				System.out.print("\nPrecomputing distance field...");
-				scene.precompute( threadPool , CPU_COUNT );
-				System.out.println("Done");
-			}
 		}
 
 		public void resetFpsCounter() 
@@ -487,7 +493,7 @@ public class Main
 		@Override
 		protected void paintComponent(Graphics g) 
 		{
-			long time = - System.currentTimeMillis();
+			long totalTime = - System.currentTimeMillis();
 
 			final Graphics2D graphics = (Graphics2D) g;
 			
@@ -495,33 +501,17 @@ public class Main
 				animator.animate();
 			}
 			
-			/*
-			 * If enabled , pre-compute distance field. 
-			 */
-			final boolean printDebugInfo = false || ( PRINT_TIMINGS && (frameCounter%10) == 0 );
-			if ( PRECOMPUTE && scene.hasChanged() ) 
-			{
-				if ( printDebugInfo ) 
-				{
-					scene.printHitRatio();
-				}
-				long time2 = -System.currentTimeMillis();
-				scene.precompute( threadPool , CPU_COUNT+1 );
-				time2 += System.currentTimeMillis();
-				if ( printDebugInfo ) 
-				{
-					System.out.println("Precompute: "+time2+" ms");
-				}
-			}
-
-			long time3 = -System.currentTimeMillis();
+			@SuppressWarnings("unused")
+			final boolean printDebugInfo = false || ( PRINT_TIMINGS && (frameCounter%10) == 0 );			
 
 			final int imageWidth = CALCULATED_IMAGE_SIZE.width;
 			final int imageHeight = CALCULATED_IMAGE_SIZE.height;
 			
-			final List<Slice> slices = new ArrayList<Slice>();
+			final List<Slice> slices = VISUALIZE_COMPUTATION_TIMES ? new ArrayList<Slice>() : null;
+			long time3 = -System.currentTimeMillis();
 			final int[] imageData = renderToImage( imageWidth , imageHeight , slices);
 			time3 += System.currentTimeMillis();
+			
 			if ( printDebugInfo ) System.out.println("Actual calculation: "+time3+" ms");
 			
 			if ( RENDER_TO_SCREEN ) 
@@ -540,62 +530,38 @@ public class Main
 				// graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
 				// graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);	
 
-				if ( PRECOMPUTE && RENDER_DISTANCE_FIELD ) 
-				{
-					scene.renderPrecomputedField( new DebugRenderer() {
-
-						private final Vector3 min = new Vector3();
-						private final Vector3 max = new Vector3();
-
-						private final int w = CALCULATED_IMAGE_SIZE.width;
-						private final int h = CALCULATED_IMAGE_SIZE.height;
-
-						private Graphics g = backgroundImage.getGraphics();
-
-						@Override
-						public void render(float xStart, float yStart,
-								float zStart, float xEnd, float yEnd,
-								float zEnd) 
-						{
-							min.set( xStart , yStart , zStart );
-							max.set( xEnd , yEnd , zEnd );
-
-							cam.project( min , 0 , 0 , w , h );
-							cam.project( max , 0 , 0 , w , h );
-
-							// gdx assumes viewport origin in the BOTTOM left
-							min.y = h - min.y;
-							max.y = h - max.y;
-							g.drawLine( (int) min.x , (int) min.y , (int) max.x , (int) max.y );
-						}
-
-						@Override
-						public void setColor(Color color) {
-							g.setColor(color);
-						}
-					} );
-				} 
 				long time5 = -System.currentTimeMillis();
 				graphics.drawImage( backgroundImage , 0 , 0, getWidth() , getHeight() , null );
 				time5 += System.currentTimeMillis();
+				
 				if ( printDebugInfo )  System.out.println("Rendering to screen: "+time5+" ms");				
 			}
 
-			time += System.currentTimeMillis();
+			totalTime += System.currentTimeMillis();
 
 			float fps;
 			float avgFps;
 			long frames;
 			synchronized(FPS_COUNTER_LOCK) 
 			{
-				totalFrameTime += time;
-				frameCounter++;
+				// wait 120 frames until starting to actually measure FPS
+				// to account for JIT / GC warmup etc.
+				if ( frameCounter == BENCHMARK_WARMUP_FRAMECOUNT && ! measurementStarted ) 
+				{
+					frameCounter=1;
+					totalFrameTime = totalTime;
+					measurementStarted = true;
+					System.out.println("Considering JVM warm-up done, FPS measurement restarted"); 
+				} else {
+					totalFrameTime += totalTime;
+					frameCounter++;					
+				}
 				frames=frameCounter;
 				
-				fps = 1000f/time;
+				fps = 1000f/totalTime;
 				avgFps = 1000f/ ( totalFrameTime / frameCounter );
 				
-				if ( BENCHMARK_MODE && frameCounter == BENCHMARK_FRAMECOUNT ) 
+				if ( BENCHMARK_MODE && frameCounter == BENCHMARK_FRAMECOUNT && measurementStarted ) 
 				{
 					
 					System.out.println("Benchmark mode,exiting after "+BENCHMARK_FRAMECOUNT+" frames (avg. FPS: "+avgFps+")");
@@ -607,15 +573,16 @@ public class Main
 				g.setColor( new Color( BACKGROUND_COLOR ) );
 				g.fillRect( 0,0,getWidth(),getHeight());
 			}
+			
 			final DecimalFormat format = new DecimalFormat("###0.0#");
 
 			g.setColor(Color.BLUE);
-			g.drawString( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms)" , 10 , 10 );
+			g.drawString( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+totalTime+" ms)" , 10 , 10 );
 			g.drawString( "Eye position  : "+Main.toString(cam.position) , 10, 25 );
 			g.drawString( "View direction: "+Main.toString(cam.direction), 10, 40 );
 
 			if ( (frameCounter%30) == 0 ) {
-				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+time+" ms , "+frames+" frames)");
+				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+totalTime+" ms , "+frames+" frames)");
 			}			
 		}
 		
@@ -665,12 +632,11 @@ public class Main
 			if ( imageData == null || imageData.length != (width*height) ) {
 				imageData = new int[ width*height ];
 				backgroundImage = new BufferedImage(width,height, BufferedImage.TYPE_INT_RGB);  
-				System.out.println("Allocated image data.");
 			} 
 
 			final AtomicInteger latch = new AtomicInteger();
-			int xStep = width / SLICE_COUNT;
-			int yStep = width / SLICE_COUNT;			
+			int xStep = width / SLICES_HORIZONTAL;
+			int yStep = width / SLICES_VERTICAL;			
 			for ( int x = 0 ; x < width ; x+=xStep) 
 			{
 				final int x1 = x;
@@ -721,10 +687,6 @@ public class Main
 						latch.wait();
 					} catch (InterruptedException e) { /* ok */ }
 				}
-			}
-
-			if ( ! RENDER_TO_SCREEN ) {
-				return null;
 			}
 			return imageData;
 		}
@@ -786,7 +748,7 @@ public class Main
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
 						
-						imageData[ (x+1) + y * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );			
+						imageData[ (x+1) + y * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );			
 						
 						if ( yBoundardNotReached ) 
 						{
@@ -799,7 +761,7 @@ public class Main
 							currentPoint.y += rayDir.y*jumpDistance;
 							currentPoint.z += rayDir.z*jumpDistance;
 							
-							imageData[ x + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+							imageData[ x + (y+1) * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );
 							
 							// ray #4
 							currentPoint.set(x+1,y+1,0);
@@ -810,7 +772,7 @@ public class Main
 							currentPoint.y += rayDir.y*jumpDistance;
 							currentPoint.z += rayDir.z*jumpDistance;
 							
-							imageData[ (x+1) + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );							
+							imageData[ (x+1) + (y+1) * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );							
 						}
 					} 
 					else if ( yBoundardNotReached ) 
@@ -824,7 +786,7 @@ public class Main
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
 						
-						imageData[ x + (y+1) * imageWidth ] = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
+						imageData[ x + (y+1) * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );
 					}
 				}
 			}
@@ -841,59 +803,14 @@ public class Main
 			float minDistance = Float.MAX_VALUE;
 			do
 			{
-				float distance;
-				if ( PRECOMPUTE ) {
-					distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z );
-				} else {
-					distance = scene.distanceUncached( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
-				}
+				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
 				
 				if ( distance <= EPSILON ) 
 				{
 					result.distanceMarched = marched;
 					result.minDistance = minDistance;
 					
-					// ===== BEGIN: Lighting calculation =====
-					if ( PRECOMPUTE ) {
-						distance = scene.distanceUncached( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
-					}
-
-					final SceneObject hitObject = hit.closestObject;
-					final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
-
-					scene.populateNormal( pointOnRay , normal ); // calculate normal
-
-					int r = 0;
-					int g = 0;
-					int b = 0;
-					
-					final PointLight[] lights = scene.lights;
-					final int lightCount = lights.length;
-					for ( int i = 0 ; i < lightCount ; i++ ) 
-					{
-						final PointLight light = lights[i];
-						float lvx = light.position.x - pointOnRay.x;
-						float lvy = light.position.y - pointOnRay.y;
-						float lvz = light.position.z - pointOnRay.z;
-						float distToLight = (float) Math.sqrt( lvx*lvx + lvy*lvy + lvz*lvz );
-						lvx /= distToLight;
-						lvy /= distToLight;
-						lvz /= distToLight;
-						float dot = normal.x*lvx + normal.y*lvy + normal.z * lvz;
-						if ( dot > 0 ) 
-						{
-							float shadowFactor = calcShadowFactor( hitObject , pointOnRay , light.position , hit );
-							final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
-							r += ( light.color.x * attenuation * dot * shadowFactor );
-							g += ( light.color.y * attenuation * dot * shadowFactor );
-							b += ( light.color.z * attenuation * dot * shadowFactor );
-							r /= 2;
-							g /= 2;
-							b /= 2;
-						}
-					}
-					return Utils.addColors( objColor , r , g ,b );
-					// END: Lighting calculation
+					return shade(pointOnRay, normal, hit);
 				} 
 				
 				if ( distance < minDistance ) {
@@ -910,6 +827,70 @@ public class Main
 			result.minDistance = minDistance;
 			result.distanceMarched = marched;
 			return BACKGROUND_COLOR;
+		}
+
+		private int tracePrimaryRayFast(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit) 
+		{
+			float marched = 0;
+			do
+			{
+				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
+				
+				if ( distance <= EPSILON ) 
+				{
+					return shade(pointOnRay, normal, hit);
+				} 
+				marched += distance;
+				
+				pointOnRay.x += rayDir.x*distance;
+				pointOnRay.y += rayDir.y*distance;
+				pointOnRay.z += rayDir.z*distance;
+			} while ( marched < MAX_MARCHING_DISTANCE  );
+			return BACKGROUND_COLOR;
+		}
+		
+		private int shade(Vector3 pointOnRay, Vector3 normal, ClosestHit hit) {
+			// ===== BEGIN: Lighting calculation =====
+			final SceneObject hitObject = hit.closestObject;
+			final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
+
+			scene.populateNormal( pointOnRay , normal ); // calculate normal
+
+			int r = 0;
+			int g = 0;
+			int b = 0;
+			
+			final PointLight[] lights = scene.lights;
+			final int lightCount = lights.length;
+			int lightsHit = 0; 
+			for ( int i = 0 ; i < lightCount ; i++ ) 
+			{
+				final PointLight light = lights[i];
+				float lvx = light.position.x - pointOnRay.x;
+				float lvy = light.position.y - pointOnRay.y;
+				float lvz = light.position.z - pointOnRay.z;
+				float distToLight = (float) Math.sqrt( lvx*lvx + lvy*lvy + lvz*lvz );
+				lvx /= distToLight;
+				lvy /= distToLight;
+				lvz /= distToLight;
+				float dot = normal.x*lvx + normal.y*lvy + normal.z * lvz;
+				if ( dot > 0 ) 
+				{
+					float shadowFactor = calcShadowFactor( hitObject , pointOnRay , light.position , hit );
+					final float attenuation = Math.max( 1.0f / (200.0f/distToLight) , 1.0f ); 
+					r += ( light.color.x * attenuation * dot * shadowFactor );
+					g += ( light.color.y * attenuation * dot * shadowFactor );
+					b += ( light.color.z * attenuation * dot * shadowFactor );
+					lightsHit++;
+				}
+			}
+			if ( lightsHit > 1 ) {
+				r /= lightsHit;
+				g /= lightsHit;
+				b /= lightsHit;
+			}
+			return Utils.addColors( objColor , r , g ,b );
+			// END: Lighting calculation
 		}
 
 		private float calcShadowFactor(SceneObject hitObject,Vector3 pointOnSurface,Vector3 lightPos,ClosestHit hit) 
@@ -934,22 +915,22 @@ public class Main
 			float distance = 0;
 			for ( float marched = 0 ; marched < distToLightSource ; marched += distance )
 			{
-				if ( PRECOMPUTE ) {
-					distance = scene.distance( currentPointX , currentPointY, currentPointZ );
-				} else {
-					distance = scene.distanceUncached( currentPointX , currentPointY, currentPointZ );
-				}
+				distance = scene.distance( currentPointX , currentPointY, currentPointZ );
 				
 				if ( distance <= EPSILON ) 
 				{
-					scene.distanceUncached( currentPointX , currentPointY, currentPointZ , hit );
+					scene.distance( currentPointX , currentPointY, currentPointZ , hit );
 					if ( hit.closestObject != hitObject ) {
 						return 0;
 					}
 					return shadowFactor;
 				} 
 				
-				shadowFactor = Math.min( shadowFactor, k * ( distance / (distToLightSource-marched) ) );
+				final float newFactor = k * ( distance / (distToLightSource-marched) );
+				if ( newFactor < shadowFactor ) {
+					// shadowFactor = Math.min( shadowFactor, newFactor );
+					shadowFactor = newFactor;
+				}
 				
 				currentPointX += rayDirX*distance;
 				currentPointY += rayDirY*distance;
