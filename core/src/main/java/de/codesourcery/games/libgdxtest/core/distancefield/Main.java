@@ -45,24 +45,24 @@ public class Main
 
 	protected static final float MAX_MARCHING_DISTANCE = 150;
 	public static final float EPSILON = 0.2f;	
-	
+
 	protected static final boolean VISUALIZE_COMPUTATION_TIMES = false;
 	protected static final boolean VISUALIZE_DELTAS = false;
-	
+
 	protected static final boolean PRINT_TIMINGS = false;
 	public static final boolean DEBUG_HIT_RATIO = false;	
-	
+
 	public static final boolean BENCHMARK_MODE = true;
-	
+
 	public static final int BENCHMARK_WARMUP_FRAMECOUNT = 400;
 	public static final int BENCHMARK_FRAMECOUNT = 100;
 
 	private static final boolean ANIMATE = true;
-	
+
 	protected static boolean RENDER_TO_SCREEN = true;
 
 	protected static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
-	
+
 	/*
 	 * i5-2500K FPS:
 	 * 
@@ -71,12 +71,12 @@ public class Main
 	 * 5x5 => 5.37
 	 * 6x6 => 5.46
 	 * 6x7 => 5.34
-	 * 7x6 => 5.71 (*)
+	 * 7x6 => 5.81 (*)
 	 * 7x7 => 5.34
 	 */
 	protected static final int SLICES_HORIZONTAL = 7;
 	protected static final int SLICES_VERTICAL = 6;
-	
+
 	protected static final char KEY_PRING_CAMERA = 'p';	
 	protected static final char KEY_TOGGLE_SHOW_DISTANCE_FIELD = 'f';		
 	protected static final char KEY_TOGGLE_RENDERING = 'r';		
@@ -117,7 +117,7 @@ public class Main
 
 		final Vector3 eyePosition = new Vector3( -9.672026f,5.9259033f,-31.723171f );
 		final Vector3 viewDirection = new Vector3( 0.3916041f,-0.061048917f,0.9181042f );
-		
+
 		scene.add( Scene.pointLight( new Vector3(-10,1,-10) , Color.WHITE ) );
 		// scene.add( Scene.pointLight( new Vector3(10,10,-10) , new Color( 210 , 0 ,0 ) ) );		
 
@@ -125,7 +125,7 @@ public class Main
 		final SceneObject cube = Scene.cube( new Vector3(0,0,0) , radius );
 		cube.setColor( 0x000000ff );
 		scene.add( cube );
-		
+
 		final SceneObject torus1 = Scene.torus( new Vector3(0,0,0) , radius*0.25f , radius*2*2.5f ).rotate( new Vector3(1,0,0) , 90 );
 		torus1.setColor( 0x00ff0000 );
 		scene.add( torus1 );
@@ -133,14 +133,14 @@ public class Main
 		final SceneObject torus2 = Scene.torus( new Vector3(-10,0,0) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
 		torus2.setColor( 0x0000ff00 );		
 		scene.add( torus2 );
-		
-//		SceneObject torus3 = Scene.torus( new Vector3(-10,10,0) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
-//		torus3.setColor( 0x00aaff00 );
-//		scene.add( torus3 );
-//		
-//		SceneObject torus4 = Scene.torus( new Vector3(-10,10,10) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
-//		torus4.setColor( 0x0000ffaa );
-//		scene.add( torus4 );
+
+		//		SceneObject torus3 = Scene.torus( new Vector3(-10,10,0) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+		//		torus3.setColor( 0x00aaff00 );
+		//		scene.add( torus3 );
+		//		
+		//		SceneObject torus4 = Scene.torus( new Vector3(-10,10,10) , radius , radius*2 ).rotate( new Vector3(1,0,0) , 90 );
+		//		torus4.setColor( 0x0000ffaa );
+		//		scene.add( torus4 );
 
 		scene.add( Scene.plane( new Vector3(0,-5,0) , new Vector3(0,1,0) ).setColor( 0xffffff ) );
 		scene.add( Scene.plane( new Vector3(50,0,0) , new Vector3(-1,0,0) ).setColor( 0xffffff ) );
@@ -157,7 +157,7 @@ public class Main
 		frame.pack();
 		frame.setVisible( true );
 		panel.requestFocus();
-		
+
 		Thread t = new Thread() {
 			@Override
 			public void run() 
@@ -197,7 +197,7 @@ public class Main
 		private float angle1 = 0;
 		private float angle2 = 0;
 		private float angle3 = 0;		
-		
+
 		private final Matrix4 m = new Matrix4();
 
 		public Animator(Scene scene, SceneObject cube, SceneObject torus1,SceneObject torus2) 
@@ -215,21 +215,15 @@ public class Main
 		}
 
 		private void animate(final Scene scene, final SceneObject cube,final SceneObject torus1, final SceneObject torus2) {
-			try 
-			{
-				m.idt();
-				m.rotate( new Vector3(1,0,0) , 90 );
-				angle1 = rotYZ(torus1,angle1,3,m);
+			m.idt();
+			m.rotate( new Vector3(1,0,0) , 90 );
+			angle1 = rotYZ(torus1,angle1,3,m);
 
-				m.idt();
-				angle3 = rotZ(torus2,angle3,-1.5f,m);
+			m.idt();
+			angle3 = rotZ(torus2,angle3,-1.5f,m);
 
-				m.idt();
-				angle2 = rotY(cube,angle2,-3,m);
-
-			} finally {
-				scene.sceneChanged();
-			}
+			m.idt();
+			angle2 = rotY(cube,angle2,-3,m);
 		}
 
 		private float rotY(SceneObject obj,float angle,float angleInc,Matrix4 m) {
@@ -238,7 +232,7 @@ public class Main
 			obj.matrix.set( m );
 			return incAngle( angle , angleInc );
 		}
-		
+
 		private float rotYZ(SceneObject obj,float angle,float angleInc,Matrix4 m) {
 			m.rotate( new Vector3(0,1,0) , angle );
 			m.rotate( new Vector3(0,0,1) , angle );			
@@ -288,10 +282,10 @@ public class Main
 
 		// @GuardedBy(FPS_COUNTER_LOCK)
 		private long totalFrameTime = 0;
-		
+
 		// @GuardedBy(FPS_COUNTER_LOCK)
 		private boolean measurementStarted = false;		
-		
+
 		private final float viewportWidth;
 		private final float viewportHeight;
 
@@ -472,36 +466,36 @@ public class Main
 			long totalTime = - System.currentTimeMillis();
 
 			final Graphics2D graphics = (Graphics2D) g;
-			
+
 			if ( ANIMATE ) {
 				animator.animate();
 			}
-			
+
 			@SuppressWarnings("unused")
 			final boolean printDebugInfo = false || ( PRINT_TIMINGS && (frameCounter%10) == 0 );			
 
 			final int imageWidth = CALCULATED_IMAGE_SIZE.width;
 			final int imageHeight = CALCULATED_IMAGE_SIZE.height;
-			
+
 			final List<Slice> slices = VISUALIZE_COMPUTATION_TIMES ? new ArrayList<Slice>() : null;
 			long time3 = -System.currentTimeMillis();
 			final int[] imageData = renderToImage( imageWidth , imageHeight , slices);
 			time3 += System.currentTimeMillis();
-			
+
 			if ( printDebugInfo ) System.out.println("Actual calculation: "+time3+" ms");
-			
+
 			if ( RENDER_TO_SCREEN ) 
 			{
 				long time4 = -System.currentTimeMillis();
 				backgroundImage.setRGB(0, 0, imageWidth, imageHeight, imageData, 0, imageWidth);
 				time4 += System.currentTimeMillis();
-				
+
 				if ( printDebugInfo )  System.out.println("converting pixel array to image: "+time4+" ms");
-				
+
 				if ( VISUALIZE_COMPUTATION_TIMES ) {
 					visualizeComputationTime(slices,backgroundImage.getGraphics());
 				}
-				
+
 				// graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
 				// graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
 				// graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);	
@@ -509,7 +503,7 @@ public class Main
 				long time5 = -System.currentTimeMillis();
 				graphics.drawImage( backgroundImage , 0 , 0, getWidth() , getHeight() , null );
 				time5 += System.currentTimeMillis();
-				
+
 				if ( printDebugInfo )  System.out.println("Rendering to screen: "+time5+" ms");				
 			}
 
@@ -533,13 +527,13 @@ public class Main
 					frameCounter++;					
 				}
 				frames=frameCounter;
-				
+
 				fps = 1000f/totalTime;
 				avgFps = 1000f/ ( totalFrameTime / frameCounter );
-				
+
 				if ( BENCHMARK_MODE && frameCounter == BENCHMARK_FRAMECOUNT && measurementStarted ) 
 				{
-					
+
 					System.out.println("Benchmark mode,exiting after "+BENCHMARK_FRAMECOUNT+" frames (avg. FPS: "+avgFps+")");
 					System.exit(0);
 				}					
@@ -549,7 +543,7 @@ public class Main
 				g.setColor( new Color( BACKGROUND_COLOR ) );
 				g.fillRect( 0,0,getWidth(),getHeight());
 			}
-			
+
 			final DecimalFormat format = new DecimalFormat("###0.0#");
 
 			g.setColor(Color.BLUE);
@@ -561,7 +555,7 @@ public class Main
 				System.out.println( "FPS : "+format.format(avgFps)+" fps ( "+format.format(fps)+" fps, "+totalTime+" ms , "+frames+" frames)");
 			}			
 		}
-		
+
 		private void visualizeComputationTime(List<Slice> slices,Graphics bgGraphics) 
 		{
 			long totalTime = 0;
@@ -569,12 +563,12 @@ public class Main
 				totalTime += s.renderTimeMillis;
 			}
 			float avg = totalTime / (float) slices.size();
-			
+
 			float maxDeviation = 0;
 			for ( Slice s : slices ) {
 				maxDeviation = Math.max( maxDeviation , Math.abs( s.renderTimeMillis - avg ) );
 			}			
-			
+
 			for ( Slice s : slices ) 
 			{
 				float factor;
@@ -590,13 +584,13 @@ public class Main
 				}
 				bgGraphics.setColor( new Color( color , 0 , 0 , 150 ) );
 				bgGraphics.fillRect( s.xStart , s.yStart , s.xEnd - s.xStart , s.yEnd - s.yStart );
-				
+
 				bgGraphics.setColor( Color.BLACK );
 				bgGraphics.drawRect( s.xStart , s.yStart , s.xEnd - s.xStart , s.yEnd - s.yStart );			
-				
+
 				int centerX = (s.xEnd + s.xStart)/2;
 				int centerY = (s.yEnd + s.yStart)/2;
-				
+
 				final String txt = Long.toString( s.renderTimeMillis );
 				Rectangle2D bounds = bgGraphics.getFontMetrics().getStringBounds( txt , bgGraphics );
 				bgGraphics.drawString( txt , (int) Math.round( centerX - bounds.getWidth()/2.0f ) , (int) Math.round( centerY+ bgGraphics.getFontMetrics().getDescent()) );
@@ -666,15 +660,15 @@ public class Main
 			}
 			return imageData;
 		}
-		
+
 		protected static final class Slice {
-			
+
 			public int xStart;
 			public int yStart;
 			public int xEnd;
 			public int yEnd;
 			public long renderTimeMillis;
-			
+
 			public Slice(int xStart, int yStart, int xEnd, int yEnd,long renderTimeMillis) 
 			{
 				this.xStart = xStart;
@@ -684,7 +678,7 @@ public class Main
 				this.renderTimeMillis = renderTimeMillis;
 			}
 		}
-		
+
 		private void renderImageRegion(int xStart,int yStart,int xEnd,int yEnd,int[] imageData,int imageWidth,int imageHeight) 
 		{
 			final Vector3 currentPoint = new Vector3();
@@ -694,23 +688,29 @@ public class Main
 			final ClosestHit hit = new ClosestHit();
 			final TraceResult traceResult = new TraceResult();
 
+			float len=0;
 			for ( int y = yStart ; y < yEnd ; y+= 2) 
 			{
 				boolean yBoundardNotReached = (y+1) < yEnd;
 				for ( int x = xStart ; x < xEnd ; x+= 2)
 				{
 					boolean xBoundardNotReached = (x+1) < xEnd;
+					
 					// trace ray #1
 					currentPoint.set(x,y,0);
 					unproject(currentPoint);
-					
+
 					rayDir.x = currentPoint.x - cam.position.x;
 					rayDir.y = currentPoint.y - cam.position.y;
 					rayDir.z = currentPoint.z - cam.position.z;
-					rayDir.nor();
-					
+
+					len = (float) Math.sqrt( rayDir.x*rayDir.x + rayDir.y*rayDir.y + rayDir.z*rayDir.z);
+					rayDir.x /= len;
+					rayDir.y /= len;
+					rayDir.z /= len;					
+
 					imageData[ x + y * imageWidth ]  = tracePrimaryRay(currentPoint,rayDir,lightVec , normal , hit , traceResult );
-					
+
 					// advance starting point for other rays
 					// in bundle if minimum distance during ray marching
 					// never got below a certain threshold
@@ -721,7 +721,7 @@ public class Main
 					} else {
 						jumpDistance = 0;
 					}
-					
+
 					if ( xBoundardNotReached ) 
 					{
 						// trace ray #2
@@ -730,43 +730,55 @@ public class Main
 						rayDir.x = currentPoint.x - cam.position.x;
 						rayDir.y = currentPoint.y - cam.position.y;
 						rayDir.z = currentPoint.z - cam.position.z;
-						rayDir.nor();
-						
+
+						len = (float) Math.sqrt( rayDir.x*rayDir.x + rayDir.y*rayDir.y + rayDir.z*rayDir.z);
+						rayDir.x /= len;
+						rayDir.y /= len;
+						rayDir.z /= len;
+
 						currentPoint.x += rayDir.x*jumpDistance;
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
-						
+
 						imageData[ (x+1) + y * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );			
-						
+
 						if ( yBoundardNotReached ) 
 						{
 							// trace #ray #3
 							currentPoint.set(x,y+1,0);
 							unproject(currentPoint);
-							
+
 							rayDir.x = currentPoint.x - cam.position.x;
 							rayDir.y = currentPoint.y - cam.position.y;
 							rayDir.z = currentPoint.z - cam.position.z;
-							rayDir.nor();
-							
+
+							len = (float) Math.sqrt( rayDir.x*rayDir.x + rayDir.y*rayDir.y + rayDir.z*rayDir.z);
+							rayDir.x /= len;
+							rayDir.y /= len;
+							rayDir.z /= len;							
+
 							currentPoint.x += rayDir.x*jumpDistance;
 							currentPoint.y += rayDir.y*jumpDistance;
 							currentPoint.z += rayDir.z*jumpDistance;
-							
+
 							imageData[ x + (y+1) * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );
-							
+
 							// ray #4
 							currentPoint.set(x+1,y+1,0);
 							unproject(currentPoint);
 							rayDir.x = currentPoint.x - cam.position.x;
 							rayDir.y = currentPoint.y - cam.position.y;
 							rayDir.z = currentPoint.z - cam.position.z;
-							rayDir.nor();							
-							
+
+							len = (float) Math.sqrt( rayDir.x*rayDir.x + rayDir.y*rayDir.y + rayDir.z*rayDir.z);
+							rayDir.x /= len;
+							rayDir.y /= len;
+							rayDir.z /= len;
+
 							currentPoint.x += rayDir.x*jumpDistance;
 							currentPoint.y += rayDir.y*jumpDistance;
 							currentPoint.z += rayDir.z*jumpDistance;
-							
+
 							imageData[ (x+1) + (y+1) * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );							
 						}
 					} 
@@ -775,26 +787,31 @@ public class Main
 						// trace #ray #3
 						currentPoint.set(x,y+1,0);
 						unproject(currentPoint);
+
 						rayDir.x = currentPoint.x - cam.position.x;
 						rayDir.y = currentPoint.y - cam.position.y;
 						rayDir.z = currentPoint.z - cam.position.z;
-						rayDir.nor();
-						
+
+						len = (float) Math.sqrt( rayDir.x*rayDir.x + rayDir.y*rayDir.y + rayDir.z*rayDir.z);
+						rayDir.x /= len;
+						rayDir.y /= len;
+						rayDir.z /= len;
+
 						currentPoint.x += rayDir.x*jumpDistance;
 						currentPoint.y += rayDir.y*jumpDistance;
 						currentPoint.z += rayDir.z*jumpDistance;
-						
+
 						imageData[ x + (y+1) * imageWidth ] = tracePrimaryRayFast(currentPoint,rayDir,lightVec , normal , hit );
 					}
 				}
 			}
 		}
-		
+
 		protected static final class TraceResult {
 			public float minDistance;
 			public float distanceMarched;
 		}
-		
+
 		private int tracePrimaryRay(Vector3 pointOnRay,Vector3 rayDir,Vector3 lightVec,Vector3 normal,ClosestHit hit,TraceResult result) 
 		{
 			float marched = 0;
@@ -802,19 +819,19 @@ public class Main
 			do
 			{
 				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
-				
+
 				if ( distance <= EPSILON ) 
 				{
 					result.distanceMarched = marched;
 					result.minDistance = minDistance;
-					
+
 					return shade(pointOnRay, normal, hit);
 				} 
-				
+
 				if ( distance < minDistance ) {
 					minDistance = distance;
 				}
-				
+
 				marched += distance;
 
 				pointOnRay.x += rayDir.x*distance;
@@ -833,31 +850,31 @@ public class Main
 			do
 			{
 				float distance = scene.distance( pointOnRay.x , pointOnRay.y, pointOnRay.z , hit );
-				
+
 				if ( distance <= EPSILON ) 
 				{
 					return shade(pointOnRay, normal, hit);
 				} 
 				marched += distance;
-				
+
 				pointOnRay.x += rayDir.x*distance;
 				pointOnRay.y += rayDir.y*distance;
 				pointOnRay.z += rayDir.z*distance;
 			} while ( marched < MAX_MARCHING_DISTANCE  );
 			return BACKGROUND_COLOR;
 		}
-		
-		private int shade(Vector3 pointOnRay, Vector3 normal, ClosestHit hit) {
-			// ===== BEGIN: Lighting calculation =====
+
+		private int shade(Vector3 pointOnRay, Vector3 normal, ClosestHit hit) 
+		{
 			final SceneObject hitObject = hit.closestObject;
 			final int objColor = hit.closestObject.getColor(pointOnRay.x , pointOnRay.y, pointOnRay.z);
 
-			scene.populateNormal( pointOnRay , normal ); // calculate normal
+			scene.populateNormal( pointOnRay , normal ); 
 
 			int r = 0;
 			int g = 0;
 			int b = 0;
-			
+
 			final PointLight[] lights = scene.lights;
 			final int lightCount = lights.length;
 			int lightsHit = 0; 
@@ -888,7 +905,6 @@ public class Main
 				b /= lightsHit;
 			}
 			return Utils.addColors( objColor , r , g ,b );
-			// END: Lighting calculation
 		}
 
 		private float calcShadowFactor(SceneObject hitObject,Vector3 pointOnSurface,Vector3 lightPos,ClosestHit hit) 
@@ -897,7 +913,7 @@ public class Main
 			float rayDirX = pointOnSurface.x - lightPos.x;
 			float rayDirY = pointOnSurface.y - lightPos.y;
 			float rayDirZ = pointOnSurface.z - lightPos.z;
-			
+
 			final float distToLightSource = (float) Math.sqrt( rayDirX*rayDirX + rayDirY*rayDirY + rayDirZ*rayDirZ );
 			rayDirX /= distToLightSource;
 			rayDirY /= distToLightSource;
@@ -909,12 +925,12 @@ public class Main
 
 			final float k = 100f;
 			float shadowFactor = 1.0f;
-			
+
 			float distance = 0;
 			for ( float marched = 0 ; marched < distToLightSource ; marched += distance )
 			{
 				distance = scene.distance( currentPointX , currentPointY, currentPointZ );
-				
+
 				if ( distance <= EPSILON ) 
 				{
 					scene.distance( currentPointX , currentPointY, currentPointZ , hit );
@@ -923,13 +939,12 @@ public class Main
 					}
 					return shadowFactor;
 				} 
-				
+
 				final float newFactor = k * ( distance / (distToLightSource-marched) );
 				if ( newFactor < shadowFactor ) {
-					// shadowFactor = Math.min( shadowFactor, newFactor );
-					shadowFactor = newFactor;
+					shadowFactor = newFactor; // shadowFactor = Math.min( shadowFactor, newFactor );
 				}
-				
+
 				currentPointX += rayDirX*distance;
 				currentPointY += rayDirY*distance;
 				currentPointZ += rayDirZ*distance;

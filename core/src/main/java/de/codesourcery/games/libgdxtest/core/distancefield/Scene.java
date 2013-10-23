@@ -12,8 +12,6 @@ public final class Scene {
 	
 	private final float normalCalcDelta;
 	
-	private final AtomicBoolean sceneHasChanged = new AtomicBoolean(true);
-	
 	public Scene() 
 	{
 		normalCalcDelta = 0.1f;
@@ -21,19 +19,6 @@ public final class Scene {
 	
 	public static SceneObject sphere(Vector3 center,float radius) {
 		return new Sphere(center,radius);
-	}
-	
-	public void sceneChanged() {
-		this.sceneHasChanged.set( true );
-	}
-	
-	public boolean hasChanged() 
-	{
-		return sceneHasChanged.get();
-	}
-	
-	public void clearSceneChanged() {
-		sceneHasChanged.set(false);
 	}
 	
 	public static SceneObject torus(Vector3 center,float rInner,float rOuter) {

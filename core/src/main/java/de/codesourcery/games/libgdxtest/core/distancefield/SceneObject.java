@@ -52,6 +52,7 @@ public abstract class SceneObject {
 	protected abstract float _distance(float px, float py, float pz);
 	
 	public int getColor(float px,float py,float pz) {
+		// TODO: More advanced ubclasses will probably want to transform the point into local/object space before determining the color...
 		return color;
 	}
 }
